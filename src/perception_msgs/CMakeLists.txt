@@ -11,6 +11,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TrackedObjectArray.msg"
   "msg/CollisionWarning.msg"
   "msg/CollisionWarningArray.msg"
+  "msg/StabilityStatus.msg"
   DEPENDENCIES std_msgs geometry_msgs
 )
 
