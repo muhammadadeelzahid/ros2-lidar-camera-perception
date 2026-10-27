@@ -5,6 +5,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -33,8 +34,13 @@ def generate_launch_description():
 
     monitor = Node(
         package='collision_monitor', executable='monitor_node',
-        name='collision_monitor', output='screen', parameters=common,
-        remappings=[('/odom', LaunchConfiguration('odom_topic'))])
+        name='collision_monitor', output='screen',
+        parameters=common + [{
+            'use_stability': ParameterValue(LaunchConfiguration('use_imu'), value_type=bool),
+            'imu_calibration_file': LaunchConfiguration('imu_calibration'),
+        }],
+        remappings=[('/odom', LaunchConfiguration('odom_topic')),
+                    ('/imu', LaunchConfiguration('imu_topic'))])
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='false'),
@@ -53,6 +59,12 @@ def generate_launch_description():
         DeclareLaunchArgument('odom_topic', default_value='/odom'),
         DeclareLaunchArgument('use_camera', default_value='true',
                               description='run the camera detector'),
+        DeclareLaunchArgument('use_imu', default_value='true',
+                              description='tip-over monitoring; the robot will not move '
+                                          'without IMU data while this is true'),
+        DeclareLaunchArgument('imu_topic', default_value='/imu'),
+        DeclareLaunchArgument('imu_calibration', default_value='',
+                              description='YAML written by calibrate_imu'),
         detector,
         camera,
         tracker,

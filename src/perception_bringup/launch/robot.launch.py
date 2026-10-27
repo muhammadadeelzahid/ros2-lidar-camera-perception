@@ -115,6 +115,9 @@ def launch_setup(context, *args, **kwargs):
             'odom_topic': arg('odom_topic'),
             'use_camera': use_camera,
             'detector_config': arg('detector_config'),
+            'use_imu': arg('use_imu'),
+            'imu_topic': arg('imu_topic'),
+            'imu_calibration': arg('imu_calibration'),
         }.items(),
     ))
 
@@ -151,6 +154,11 @@ def generate_launch_description():
             'detector_config',
             default_value=os.path.join(get_package_share_directory('lidar_object_detection'),
                                        'config', 'pointpillars.yaml')),
+        DeclareLaunchArgument('use_imu', default_value='true',
+                              description='false if the vehicle has no IMU'),
+        DeclareLaunchArgument('imu_topic', default_value='/imu'),
+        DeclareLaunchArgument('imu_calibration', default_value='',
+                              description='YAML written by calibrate_imu'),
         DeclareLaunchArgument('rviz', default_value='false'),
         OpaqueFunction(function=launch_setup),
     ])

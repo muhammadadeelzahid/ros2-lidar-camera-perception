@@ -1,0 +1,4 @@
+# 1001 samples over 10 s
+roll_offset: 0.018642    # rad, 1.07 deg
+pitch_offset: -0.008948   # rad, -0.51 deg
+gyro_bias: [-0.000325, 0.000695, -0.000552]   # rad/s

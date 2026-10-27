@@ -31,6 +31,22 @@
     crit_ttc: 1.0
     warn_ttc: 3.0
     tracks_timeout: 0.5          # s without /tracks before the robot is held stopped
+    # Tip-over stability from /imu. Contacts and CG are in the base frame; the
+    # defaults are the sim robot: two wheels and two centre-line casters.
+    use_stability: true
+    stability_gate: true         # false: warn only, never change commands
+    support_points: [0.17, 0.0, 0.0, 0.17, -0.17, 0.0, 0.0, -0.17]   # x, y pairs (m)
+    cg: [0.0, 0.0, 0.12]         # m; raise z for a load carried high
+    stability_info_deg: 15.0
+    stability_warn_deg: 10.0
+    stability_crit_deg: 5.0
+    stability_min_margin_deg: 5.0   # commands are scaled down to keep this margin
+    imu_timeout: 0.2             # s without /imu before the robot is held stopped
+    attitude_time_constant: 1.0  # s, gyro vs accelerometer crossover
+    accel_lowpass_hz: 5.0
+    response_time: 0.5           # s to reach a commanded speed
+    max_accel: 1.0               # m/s^2 the drive can deliver
+    max_decel: 0.5               # m/s^2 used when the stability limit slows the robot
     # Protective field on the raw point cloud, independent of detection.
     use_protective_field: true
     base_frame: base_footprint   # base_link on most real robots

@@ -61,6 +61,7 @@ def generate_launch_description():
             'use_sim_time': 'true',
             'detector_config': LaunchConfiguration('detector_config'),
             'params_file': LaunchConfiguration('params_file'),
+            'imu_calibration': LaunchConfiguration('imu_calibration'),
         }.items(),
     )
 
@@ -92,6 +93,10 @@ def generate_launch_description():
         DeclareLaunchArgument('payload_height', default_value='0.0',
                               description='height of an extra mass above the ground, 0 for none'),
         DeclareLaunchArgument('payload_mass', default_value='6.0'),
+        DeclareLaunchArgument(
+            'imu_calibration',
+            default_value=PathJoinSubstitution(
+                [FindPackageShare('perception_bringup'), 'config', 'sim_imu_calibration.yaml'])),
         DeclareLaunchArgument(
             'params_file',
             default_value=PathJoinSubstitution(
