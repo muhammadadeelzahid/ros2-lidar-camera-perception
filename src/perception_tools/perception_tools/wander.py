@@ -72,7 +72,8 @@ def main(argv=None):
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        node.pub.publish(Twist())
+        if rclpy.ok():
+            node.pub.publish(Twist())
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
