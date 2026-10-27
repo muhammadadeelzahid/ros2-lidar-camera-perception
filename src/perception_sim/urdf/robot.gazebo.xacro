@@ -9,6 +9,11 @@
     <mu1>0.0</mu1>
     <mu2>0.0</mu2>
   </gazebo>
+  <gazebo reference="rear_caster">
+    <material>Gazebo/Black</material>
+    <mu1>0.0</mu1>
+    <mu2>0.0</mu2>
+  </gazebo>
   <gazebo reference="camera_link"><material>Gazebo/Red</material></gazebo>
   <gazebo reference="lidar3d_link"><material>Gazebo/Black</material></gazebo>
 

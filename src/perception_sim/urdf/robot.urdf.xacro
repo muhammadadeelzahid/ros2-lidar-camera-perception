@@ -76,25 +76,31 @@
   <xacro:wheel prefix="left" y_reflect="1"/>
   <xacro:wheel prefix="right" y_reflect="-1"/>
 
-  <link name="caster">
-    <visual>
-      <geometry><sphere radius="${wheel_radius/2.0}"/></geometry>
-      <material name="caster"><color rgba="0.1 0.1 0.1 1.0"/></material>
-    </visual>
-    <collision>
-      <geometry><sphere radius="${wheel_radius/2.0}"/></geometry>
-      <surface><friction><ode><mu>0.0</mu><mu2>0.0</mu2></ode></friction></surface>
-    </collision>
-    <inertial>
-      <mass value="0.2"/>
-      <inertia ixx="1e-4" ixy="0" ixz="0" iyy="1e-4" iyz="0" izz="1e-4"/>
-    </inertial>
-  </link>
-  <joint name="caster_joint" type="fixed">
-    <parent link="base_link"/>
-    <child link="caster"/>
-    <origin xyz="${base_length/2.0 - wheel_radius/2.0} 0 ${-base_height/2.0 - wheel_radius/2.0}" rpy="0 0 0"/>
-  </joint>
+  <!-- Casters front and rear so the body cannot pitch when accelerating or braking. -->
+  <xacro:macro name="caster" params="name x_reflect">
+    <link name="${name}">
+      <visual>
+        <geometry><sphere radius="${wheel_radius/2.0}"/></geometry>
+        <material name="caster"><color rgba="0.1 0.1 0.1 1.0"/></material>
+      </visual>
+      <collision>
+        <geometry><sphere radius="${wheel_radius/2.0}"/></geometry>
+        <surface><friction><ode><mu>0.0</mu><mu2>0.0</mu2></ode></friction></surface>
+      </collision>
+      <inertial>
+        <mass value="0.2"/>
+        <inertia ixx="1e-4" ixy="0" ixz="0" iyy="1e-4" iyz="0" izz="1e-4"/>
+      </inertial>
+    </link>
+    <joint name="${name}_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${name}"/>
+      <origin xyz="${x_reflect * (base_length/2.0 - wheel_radius/2.0)} 0 ${-base_height/2.0 - wheel_radius/2.0}" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:caster name="caster" x_reflect="1"/>
+  <xacro:caster name="rear_caster" x_reflect="-1"/>
 
   <!-- Camera at the front of the chassis, looking forward. -->
   <link name="camera_link">
