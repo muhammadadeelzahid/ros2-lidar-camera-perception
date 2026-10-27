@@ -30,3 +30,12 @@
     info_dist: 3.0
     crit_ttc: 1.0
     warn_ttc: 3.0
+    # Protective field on the raw point cloud, independent of detection.
+    use_protective_field: true
+    base_frame: base_footprint   # base_link on most real robots
+    field_min_length: 0.4        # m ahead of the bumper, plus speed * reaction time
+    field_reaction_time: 1.0
+    field_margin: 0.1            # m added on each side of the vehicle width
+    field_min_z: 0.1             # m above the base frame; ignores the ground
+    field_max_z: 2.0
+    field_min_points: 3
