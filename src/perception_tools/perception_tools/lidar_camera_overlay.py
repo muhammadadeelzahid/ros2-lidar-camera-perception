@@ -17,7 +17,7 @@ from rclpy.time import Time
 import cv2
 from cv_bridge import CvBridge
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2
-from sensor_msgs_py import point_cloud2
+from lidar_object_detection.cloud import cloud_to_xyz
 
 import tf2_ros
 
@@ -69,8 +69,7 @@ class Overlay(Node):
             self.get_logger().warn(str(exc), throttle_duration_sec=2.0)
             return
 
-        raw = point_cloud2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True)
-        pts = np.array([[p[0], p[1], p[2]] for p in raw], dtype=float)
+        pts = cloud_to_xyz(msg)
         if pts.shape[0] == 0:
             return
         if pts.shape[0] > self.max_points:

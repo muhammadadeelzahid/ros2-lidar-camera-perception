@@ -17,7 +17,7 @@ from rclpy.node import Node
 
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import PointCloud2
-from sensor_msgs_py import point_cloud2
+from lidar_object_detection.cloud import cloud_to_xyz
 
 
 class Wander(Node):
@@ -41,8 +41,7 @@ class Wander(Node):
         return float(rng[mask].min()) if mask.any() else float('inf')
 
     def on_cloud(self, msg):
-        raw = point_cloud2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True)
-        pts = np.array([[p[0], p[1], p[2]] for p in raw], dtype=float)
+        pts = cloud_to_xyz(msg)
         if pts.shape[0] == 0:
             return
         pts = pts[(pts[:, 2] > self.min_z) & (pts[:, 2] < self.max_z)]

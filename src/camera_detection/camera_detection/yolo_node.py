@@ -34,7 +34,7 @@ class YoloNode(Node):
         self.backend, self.model = self._load()
 
         self.pub = self.create_publisher(Detection2DArray, '/detections/camera', 10)
-        self.create_subscription(Image, '/camera/image_raw', self.on_image, 5)
+        self.create_subscription(Image, '/camera/image_raw', self.on_image, 1)
         self.get_logger().info(f'camera detector ready (backend: {self.backend})')
 
     def _load(self):
@@ -71,7 +71,8 @@ class YoloNode(Node):
             det.bbox.size_x = float(w)
             det.bbox.size_y = float(h)
             out.detections.append(det)
-        self.pub.publish(out)
+        if rclpy.ok():
+            self.pub.publish(out)
 
     def _detect_yolo(self, img):
         results = self.model.predict(img, conf=self.conf, verbose=False)

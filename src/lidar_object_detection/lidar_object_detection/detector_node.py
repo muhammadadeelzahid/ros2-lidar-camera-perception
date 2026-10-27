@@ -19,7 +19,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import PointCloud2
-from sensor_msgs_py import point_cloud2
+from lidar_object_detection.cloud import cloud_to_xyz
 from vision_msgs.msg import (
     BoundingBox3D,
     Detection3D,
@@ -53,13 +53,12 @@ class DetectorNode(Node):
 
         self.model = DetectorModel(config, logger=self.get_logger())
         self.pub = self.create_publisher(Detection3DArray, '/detections/lidar', 10)
-        self.create_subscription(PointCloud2, '/points', self.on_cloud, 5)
+        # Depth 1: always work on the newest scan rather than a backlog.
+        self.create_subscription(PointCloud2, '/points', self.on_cloud, 1)
         self.get_logger().info(f'detector ready (backend: {self.model.backend})')
 
     def on_cloud(self, msg):
-        raw = point_cloud2.read_points(
-            msg, field_names=('x', 'y', 'z'), skip_nans=True)
-        pts = np.array([[p[0], p[1], p[2]] for p in raw], dtype=np.float32)
+        pts = cloud_to_xyz(msg)
         if pts.shape[0] == 0:
             return
         cloud = np.hstack([pts, np.zeros((pts.shape[0], 1), dtype=np.float32)])
@@ -92,7 +91,8 @@ class DetectorNode(Node):
             bbox.size.z = b.dz
             det.bbox = bbox
             out.detections.append(det)
-        self.pub.publish(out)
+        if rclpy.ok():
+            self.pub.publish(out)
 
 
 def main(argv=None):
