@@ -8,6 +8,7 @@ to the OpenCV HOG pedestrian detector if ultralytics is not installed.
 import numpy as np
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 from cv_bridge import CvBridge
@@ -105,7 +106,7 @@ def main(argv=None):
     node = YoloNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()

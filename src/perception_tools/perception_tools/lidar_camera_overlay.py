@@ -10,6 +10,7 @@ the same edges in the image, the camera/LiDAR mounting in robot_sensors.yaml
 import numpy as np
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.time import Time
 
@@ -105,7 +106,7 @@ def main(argv=None):
     node = Overlay()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()

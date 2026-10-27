@@ -12,6 +12,7 @@ import random
 import numpy as np
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 from geometry_msgs.msg import Twist
@@ -69,7 +70,7 @@ def main(argv=None):
     node = Wander()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.pub.publish(Twist())
