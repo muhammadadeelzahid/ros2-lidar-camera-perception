@@ -35,6 +35,11 @@ cmd_vel_in          -> collision_monitor  -> cmd_vel
 Tracks are kept in the `odom` frame so that object velocities are independent of the
 vehicle's own motion.
 
+The collision monitor also checks a protective field on the raw point cloud: if
+points fall inside a box ahead of the vehicle, whose length grows with speed, it
+stops even when nothing was detected. Reverse commands are still allowed so the
+vehicle can back away.
+
 ## Build
 
 ```bash
@@ -89,7 +94,8 @@ Supported drivers are Velodyne (`lidar_model:=VLP16`, `VLP32C`, ...) for the LiD
 and usb_cam or RealSense for the camera. For other sensors run their driver
 separately and pass `lidar:=none points_topic:=...` or `camera:=none`. Without odometry,
 set `tracking_frame` to the base frame and `use_odom: false` in
-`perception_bringup/config/perception.yaml`.
+`perception_bringup/config/perception.yaml`. Set `base_frame`, `ego_length` and
+`ego_width` there to match the vehicle so the protective field covers its footprint.
 
 ## Calibration
 
