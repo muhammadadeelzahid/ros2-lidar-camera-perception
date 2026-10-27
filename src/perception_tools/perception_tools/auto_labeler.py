@@ -49,6 +49,8 @@ class AutoLabeler(Node):
         self.max_range = self.declare_parameter('max_range', 30.0).value
         # Objects with fewer returns than this are hidden or too far to learn from.
         self.min_points = self.declare_parameter('min_points', 5).value
+        # Labels assume a level sensor; skip frames where the vehicle pitches or rolls.
+        self.max_tilt = self.declare_parameter('max_tilt', 0.035).value
         self.stride = self.declare_parameter('frame_stride', 3).value
 
         self.points_dir = os.path.join(self.out_dir, 'points')
@@ -59,6 +61,7 @@ class AutoLabeler(Node):
         self.states = None
         self.seen = 0
         self.saved = 0
+        self.skipped_tilt = 0
 
         self.create_subscription(ModelStates, '/gazebo/model_states',
                                  self.on_states, 10)
@@ -67,6 +70,15 @@ class AutoLabeler(Node):
 
     def on_states(self, msg):
         self.states = msg
+
+    def tilt(self):
+        """Largest of the ego's roll and pitch (rad), or None."""
+        if self.states is None or self.ego_model not in self.states.name:
+            return None
+        q = self.states.pose[self.states.name.index(self.ego_model)].orientation
+        roll = math.atan2(2.0 * (q.w * q.x + q.y * q.z), 1.0 - 2.0 * (q.x * q.x + q.y * q.y))
+        pitch = math.asin(max(-1.0, min(1.0, 2.0 * (q.w * q.y - q.z * q.x))))
+        return max(abs(roll), abs(pitch))
 
     def ego_pose(self):
         """Return the LiDAR world pose (x, y, z, yaw), or None."""
@@ -106,6 +118,9 @@ class AutoLabeler(Node):
         lidar = self.ego_pose()
         if lidar is None:
             return
+        if self.tilt() > self.max_tilt:
+            self.skipped_tilt += 1
+            return
         pts = cloud_to_xyz(msg)
         if pts.shape[0] == 0:
             return
@@ -133,7 +148,8 @@ def main(argv=None):
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        node.get_logger().info(f'done: {node.saved} frames in {node.out_dir}')
+        node.get_logger().info(f'done: {node.saved} frames in {node.out_dir}, '
+                               f'{node.skipped_tilt} skipped for tilt')
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
