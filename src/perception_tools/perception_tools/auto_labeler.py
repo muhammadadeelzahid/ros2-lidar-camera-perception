@@ -3,7 +3,8 @@
 
 For each LiDAR frame, reads the true poses of pedestrians and vehicles from
 /gazebo/model_states and writes the point cloud with a label file of 3D boxes in the
-LiDAR frame, one box per line: class x y z dx dy dz heading. Objects with fewer than
+LiDAR frame, one box per line: class x y z dx dy dz heading. The sensor's world pose
+for each frame goes to poses.txt. Objects with fewer than
 min_points returns inside their box are left out, since the sensor cannot see them.
 """
 
@@ -57,6 +58,8 @@ class AutoLabeler(Node):
         self.labels_dir = os.path.join(self.out_dir, 'labels')
         os.makedirs(self.points_dir, exist_ok=True)
         os.makedirs(self.labels_dir, exist_ok=True)
+        # Sensor pose in the world for each saved frame: frame x y z yaw
+        self.poses = open(os.path.join(self.out_dir, 'poses.txt'), 'a')
 
         self.states = None
         self.seen = 0
@@ -131,6 +134,8 @@ class AutoLabeler(Node):
                 if points_in_box(pts, r[1:]) >= self.min_points]
         name = f'{self.saved:06d}'
         np.save(os.path.join(self.points_dir, name + '.npy'), cloud)
+        self.poses.write('{} {:.3f} {:.3f} {:.3f} {:.4f}\n'.format(name, *lidar))
+        self.poses.flush()
         with open(os.path.join(self.labels_dir, name + '.txt'), 'w') as fh:
             for r in rows:
                 fh.write('{} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.4f}\n'
