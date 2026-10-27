@@ -4,6 +4,8 @@ Imported lazily by DetectorModel. Needs torch, OpenPCDet (pcdet) and a checkpoin
 If loading fails the wrapper falls back to the clustering detector.
 """
 
+import logging
+
 import numpy as np
 
 from lidar_object_detection.boxes import Box3D
@@ -41,7 +43,9 @@ class OpenPCDetBackend:
             num_class=len(cfg.CLASS_NAMES),
             dataset=self.dataset,
         )
-        self.model.load_params_from_file(filename=checkpoint, logger=None, to_cpu=True)
+        self.model.load_params_from_file(filename=checkpoint,
+                                         logger=logging.getLogger('openpcdet'),
+                                         to_cpu=True)
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.model.to(self.device).eval()
 

@@ -40,7 +40,10 @@ class DetectorModel:
             self.backend = 'openpcdet'
             self._info(f'loaded OpenPCDet detector from {checkpoint}')
         except Exception as exc:  # noqa: BLE001 - fall back on any failure
-            self._info(f'deep backend unavailable ({exc}); using geometric fallback')
+            # A checkpoint was configured, so this is not the expected setup: say so loudly.
+            msg = f'could not load OpenPCDet model ({exc!r}); using clustering instead'
+            if self.log is not None:
+                self.log.warning(msg)
             self._deep = None
 
     def detect(self, cloud):

@@ -12,6 +12,7 @@ matches a label when their centres are within --gate metres.
 
 import argparse
 import glob
+import logging
 import math
 import os
 import time
@@ -101,7 +102,8 @@ def main(argv=None):
 
     with open(args.config) as fh:
         config = yaml.safe_load(fh) or {}
-    model = DetectorModel(config)
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s %(message)s')
+    model = DetectorModel(config, logger=logging.getLogger('eval_detector'))
     print(f'backend: {model.backend}')
     print(summary(evaluate(model, args.data, args.max_range, args.gate)))
 
