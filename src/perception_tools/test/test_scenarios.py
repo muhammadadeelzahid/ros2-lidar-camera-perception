@@ -75,3 +75,13 @@ def test_export_skips_empty_frames(tmp_path):
     assert sum(len(v) for v in sets.values()) == 5
     _, sets = export(find_scenarios([root]), str(tmp_path / 'b'), 0.0, 0.0, keep_empty=True)
     assert sum(len(v) for v in sets.values()) == 6
+
+
+def test_posts_are_placed_and_avoided():
+    world, layout = generate(5, posts=4)
+    assert len(layout.posts) == 4
+    assert world.count('<model name="post_') == 4
+    for _, _, a, b, _ in layout.actors:
+        for cx, cy, sx, sy, _ in layout.posts:
+            for p in (a, b):
+                assert abs(p[0] - cx) > sx / 2 or abs(p[1] - cy) > sy / 2

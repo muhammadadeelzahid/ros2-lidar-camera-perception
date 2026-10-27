@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate a randomized warehouse world for Gazebo.
 
-Each seed gives a different layout of shelves and pallets plus pedestrians and
+Each seed gives a different layout of shelves, pallets and posts plus pedestrians and
 forklifts moving between free points. Writes the world and a matching
 .agents.yaml with the paths for agent_mover. Used to build separate train / val /
 test scenarios so evaluation runs on layouts the detector has not seen.
@@ -44,11 +44,12 @@ class Layout:
         self.clear_radius = clear_radius
         self.shelves = []
         self.pallets = []
+        self.posts = []    # (cx, cy, sx, sy, shape) with shape 'box' or 'cylinder'
         self.actors = []   # (name, kind, (ax, ay), (bx, by), speed)
 
     @property
     def obstacles(self):
-        return self.shelves + self.pallets
+        return self.shelves + self.pallets + [p[:4] for p in self.posts]
 
     def _near_spawn(self, box):
         sx, sy = self.spawn
@@ -71,7 +72,7 @@ class Layout:
             return box
         return None
 
-    def add_obstacles(self, n_shelves, n_pallets):
+    def add_obstacles(self, n_shelves, n_pallets, n_posts=0):
         for _ in range(n_shelves):
             box = self._place(self.rng.choice(SHELF_SIZES), self.obstacles, SHELF_GAP)
             if box:
@@ -80,6 +81,16 @@ class Layout:
             box = self._place(PALLET_SIZE, self.obstacles, 0.8)
             if box:
                 self.pallets.append(box)
+        # Pillars and posts: tall, thin static objects that look person-sized to a
+        # sparse LiDAR. Without them in training the detector calls them pedestrians.
+        for _ in range(n_posts):
+            if self.rng.random() < 0.5:
+                side, shape = self.rng.uniform(0.3, 0.6), 'box'
+            else:
+                side, shape = 2.0 * self.rng.uniform(0.15, 0.3), 'cylinder'
+            box = self._place((side, side), self.obstacles, 1.0)
+            if box:
+                self.posts.append(box + (shape,))
 
     def _free_point(self):
         hx, hy = self.size_x / 2.0 - 1.0, self.size_y / 2.0 - 1.0
@@ -116,6 +127,21 @@ class Layout:
                 speed = self.rng.uniform(*speed_range)
                 self.actors.append((f'{prefix}_{i + 1}', kind, a, b, speed))
                 break
+
+
+def _cylinder_model(name, cx, cy, radius, height, color):
+    geom = f'<cylinder><radius>{radius:.2f}</radius><length>{height:.2f}</length></cylinder>'
+    return f"""    <model name="{name}">
+      <static>true</static>
+      <pose>{cx:.2f} {cy:.2f} {height / 2.0:.3f} 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry>{geom}</geometry></collision>
+        <visual name="v"><geometry>{geom}</geometry>
+          <material><ambient>{color} 1</ambient><diffuse>{color} 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+"""
 
 
 def _box_model(name, box, height, color):
@@ -217,6 +243,11 @@ def build_world(layout):
         parts.append(_box_model(f'shelf_{i + 1}', box, 2.0, '0.6 0.5 0.35'))
     for i, box in enumerate(layout.pallets):
         parts.append(_box_model(f'pallet_{i + 1}', box, 0.6, '0.55 0.45 0.3'))
+    for i, (cx, cy, sx, sy, shape) in enumerate(layout.posts):
+        if shape == 'box':
+            parts.append(_box_model(f'post_{i + 1}', (cx, cy, sx, sy), 2.5, '0.5 0.5 0.5'))
+        else:
+            parts.append(_cylinder_model(f'post_{i + 1}', cx, cy, sx / 2.0, 2.5, '0.5 0.5 0.5'))
     for name, kind, a, b, _ in layout.actors:
         parts.append(_agent_model(name, kind, a, b))
     parts.append('  </world>\n</sdf>\n')
@@ -224,9 +255,9 @@ def build_world(layout):
 
 
 def generate(seed, size_x=20.0, size_y=14.0, shelves=4, pallets=3,
-             pedestrians=2, vehicles=1, spawn=(-8.0, 0.0), clear_radius=1.5):
+             pedestrians=2, vehicles=1, spawn=(-8.0, 0.0), clear_radius=1.5, posts=3):
     layout = Layout(seed, size_x, size_y, spawn, clear_radius)
-    layout.add_obstacles(shelves, pallets)
+    layout.add_obstacles(shelves, pallets, posts)
     layout.add_actors('pedestrian', pedestrians, (0.9, 1.4))
     layout.add_actors('vehicle', vehicles, (1.0, 2.0), min_length=6.0)
     return build_world(layout), layout
@@ -241,6 +272,7 @@ def main(argv=None):
     parser.add_argument('--size-y', type=float, default=14.0)
     parser.add_argument('--shelves', type=int, default=4)
     parser.add_argument('--pallets', type=int, default=3)
+    parser.add_argument('--posts', type=int, default=3, help='pillars and posts')
     parser.add_argument('--pedestrians', type=int, default=2)
     parser.add_argument('--vehicles', type=int, default=1)
     parser.add_argument('--spawn-x', type=float, default=-8.0)
@@ -249,14 +281,15 @@ def main(argv=None):
 
     world, layout = generate(
         args.seed, args.size_x, args.size_y, args.shelves, args.pallets,
-        args.pedestrians, args.vehicles, (args.spawn_x, args.spawn_y))
+        args.pedestrians, args.vehicles, (args.spawn_x, args.spawn_y), posts=args.posts)
     with open(args.output, 'w') as fh:
         fh.write(world)
     agents_path = os.path.splitext(args.output)[0] + '.agents.yaml'
     with open(agents_path, 'w') as fh:
         fh.write(agents_yaml(layout))
     print(f'wrote {args.output} and {agents_path}: {len(layout.shelves)} shelves, '
-          f'{len(layout.pallets)} pallets, {len(layout.actors)} moving objects')
+          f'{len(layout.pallets)} pallets, {len(layout.posts)} posts, '
+          f'{len(layout.actors)} moving objects')
 
 
 if __name__ == '__main__':
