@@ -1,4 +1,4 @@
-# collision-perception
+# ros2-lidar-camera-perception
 
 Camera and 3D LiDAR perception for collision avoidance on a ground vehicle. Objects
 are detected in the point cloud, their class is checked against a camera detector,
@@ -52,6 +52,10 @@ source install/setup.bash
 ros2 launch perception_bringup sim.launch.py
 ```
 
+Pedestrians and forklifts are kinematic models moved along the paths in
+`perception_sim/worlds/warehouse.agents.yaml` by `agent_mover`. Gazebo actors are not
+used because ray sensors do not detect them.
+
 Drive with the keyboard from a second terminal. Commands go through the collision
 monitor, so the robot stops if a pedestrian or forklift gets too close.
 
@@ -59,7 +63,8 @@ monitor, so the robot stops if a pedestrian or forklift gets too close.
 ./scripts/drive.sh
 ```
 
-To run in a randomly generated warehouse instead of the default one:
+To run in a randomly generated warehouse instead of the default one (each world
+comes with a matching `.agents.yaml`):
 
 ```bash
 ./scripts/generate_scenarios.sh 20
@@ -106,7 +111,9 @@ ros2 run perception_tools lidar_camera_overlay
 
 ## Detector training
 
-Without a trained model the LiDAR detector uses Euclidean clustering. To train a
+Without a trained model the LiDAR detector uses Euclidean clustering. In the default
+warehouse it finds about 60% of visible objects within 15 m, with 0.15 m centre error
+and 0.85 false positives per frame, mostly pillars and shelf ends. To train a
 PointPillars model with OpenPCDet:
 
 ```bash
@@ -140,7 +147,8 @@ ros2 run perception_tools eval_metrics --ros-args -p use_sim_time:=true
 ```
 
 Ctrl-C prints recall, precision, position error and ID switches, and writes
-`analysis_output/error_vs_range.png`.
+`analysis_output/error_vs_range.png`. Objects with fewer than 5 LiDAR returns are
+treated as occluded and not counted; the auto-labeler skips them for the same reason.
 
 ## Tests
 

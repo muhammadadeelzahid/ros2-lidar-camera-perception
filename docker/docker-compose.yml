@@ -3,8 +3,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: collision-perception:humble
-    container_name: cp_dev
+    image: ros2-lidar-camera-perception:humble
+    container_name: lidar_camera_perception
     network_mode: host
     ipc: host
     privileged: true
