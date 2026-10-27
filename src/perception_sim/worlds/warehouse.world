@@ -105,67 +105,44 @@
       </link>
     </model>
 
-    <!-- Dynamic objects: two pedestrians and a moving forklift. Their names are read
-         from /gazebo/model_states by the auto-labeler to generate ground-truth boxes. -->
-    <actor name="pedestrian_1">
-      <skin><filename>walk.dae</filename><scale>1.0</scale></skin>
-      <animation name="walking"><filename>walk.dae</filename><interpolate_x>true</interpolate_x></animation>
-      <script>
-        <loop>true</loop>
-        <auto_start>true</auto_start>
-        <delay_start>0.0</delay_start>
-        <trajectory id="0" type="walking">
-          <waypoint><time>0</time><pose>-7 2 0 0 0 0</pose></waypoint>
-          <waypoint><time>9</time><pose>7 2 0 0 0 0</pose></waypoint>
-          <waypoint><time>9.5</time><pose>7 2 0 0 0 3.14159</pose></waypoint>
-          <waypoint><time>18</time><pose>-7 2 0 0 0 3.14159</pose></waypoint>
-          <waypoint><time>18.5</time><pose>-7 2 0 0 0 0</pose></waypoint>
-        </trajectory>
-      </script>
-    </actor>
-
-    <actor name="pedestrian_2">
-      <skin><filename>walk.dae</filename><scale>1.0</scale></skin>
-      <animation name="walking"><filename>walk.dae</filename><interpolate_x>true</interpolate_x></animation>
-      <script>
-        <loop>true</loop>
-        <auto_start>true</auto_start>
-        <delay_start>2.0</delay_start>
-        <trajectory id="0" type="walking">
-          <waypoint><time>0</time><pose>2 -4 0 0 0 1.5708</pose></waypoint>
-          <waypoint><time>7</time><pose>2 4 0 0 0 1.5708</pose></waypoint>
-          <waypoint><time>7.5</time><pose>2 4 0 0 0 -1.5708</pose></waypoint>
-          <waypoint><time>14</time><pose>2 -4 0 0 0 -1.5708</pose></waypoint>
-          <waypoint><time>14.5</time><pose>2 -4 0 0 0 1.5708</pose></waypoint>
-        </trajectory>
-      </script>
-    </actor>
-
-    <actor name="forklift_1">
+    <!-- Moving objects. Positioned by perception_tools/agent_mover from
+         warehouse.agents.yaml; their names are used for ground-truth labels. -->
+    <model name="pedestrian_1">
+      <pose>-7.0 1.5 0 0 0 0</pose>
       <link name="body">
-        <visual name="v">
-          <geometry><box><size>1.2 0.8 1.4</size></box></geometry>
-          <material><ambient>0.8 0.5 0.1 1</ambient><diffuse>0.9 0.6 0.1 1</diffuse></material>
-        </visual>
-        <pose>0 0 0.7 0 0 0</pose>
+        <gravity>false</gravity>
+        <kinematic>true</kinematic>
+        <collision name="torso_c"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>1.5</length></cylinder></geometry></collision>
+        <visual name="torso_v"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>1.5</length></cylinder></geometry>
+          <material><ambient>0.2 0.6 0.2 1</ambient><diffuse>0.2 0.7 0.2 1</diffuse></material></visual>
+        <collision name="head_c"><pose>0 0 1.65 0 0 0</pose><geometry><sphere><radius>0.13</radius></sphere></geometry></collision>
+        <visual name="head_v"><pose>0 0 1.65 0 0 0</pose><geometry><sphere><radius>0.13</radius></sphere></geometry>
+          <material><ambient>0.9 0.75 0.6 1</ambient><diffuse>0.9 0.75 0.6 1</diffuse></material></visual>
       </link>
-      <script>
-        <loop>true</loop>
-        <auto_start>true</auto_start>
-        <delay_start>0.0</delay_start>
-        <trajectory id="0" type="square">
-          <waypoint><time>0</time><pose>-6 -4 0 0 0 0</pose></waypoint>
-          <waypoint><time>8</time><pose>6 -4 0 0 0 0</pose></waypoint>
-          <waypoint><time>9</time><pose>6 -4 0 0 0 1.5708</pose></waypoint>
-          <waypoint><time>13</time><pose>6 -1 0 0 0 1.5708</pose></waypoint>
-          <waypoint><time>14</time><pose>6 -1 0 0 0 3.14159</pose></waypoint>
-          <waypoint><time>22</time><pose>-6 -1 0 0 0 3.14159</pose></waypoint>
-          <waypoint><time>23</time><pose>-6 -1 0 0 0 -1.5708</pose></waypoint>
-          <waypoint><time>27</time><pose>-6 -4 0 0 0 -1.5708</pose></waypoint>
-          <waypoint><time>28</time><pose>-6 -4 0 0 0 0</pose></waypoint>
-        </trajectory>
-      </script>
-    </actor>
+    </model>
+    <model name="pedestrian_2">
+      <pose>0.0 -4.5 0 0 0 1.5708</pose>
+      <link name="body">
+        <gravity>false</gravity>
+        <kinematic>true</kinematic>
+        <collision name="torso_c"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>1.5</length></cylinder></geometry></collision>
+        <visual name="torso_v"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>1.5</length></cylinder></geometry>
+          <material><ambient>0.2 0.3 0.7 1</ambient><diffuse>0.2 0.3 0.8 1</diffuse></material></visual>
+        <collision name="head_c"><pose>0 0 1.65 0 0 0</pose><geometry><sphere><radius>0.13</radius></sphere></geometry></collision>
+        <visual name="head_v"><pose>0 0 1.65 0 0 0</pose><geometry><sphere><radius>0.13</radius></sphere></geometry>
+          <material><ambient>0.9 0.75 0.6 1</ambient><diffuse>0.9 0.75 0.6 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="forklift_1">
+      <pose>-7.0 -4.3 0 0 0 0</pose>
+      <link name="body">
+        <gravity>false</gravity>
+        <kinematic>true</kinematic>
+        <collision name="body_c"><pose>0 0 0.7 0 0 0</pose><geometry><box><size>1.2 0.8 1.4</size></box></geometry></collision>
+        <visual name="body_v"><pose>0 0 0.7 0 0 0</pose><geometry><box><size>1.2 0.8 1.4</size></box></geometry>
+          <material><ambient>0.8 0.5 0.1 1</ambient><diffuse>0.9 0.6 0.1 1</diffuse></material></visual>
+      </link>
+    </model>
 
   </world>
 </sdf>

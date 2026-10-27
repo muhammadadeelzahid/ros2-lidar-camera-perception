@@ -27,6 +27,7 @@ setup(
             'calibrate_camera = perception_tools.calibrate_camera:main',
             'lidar_camera_overlay = perception_tools.lidar_camera_overlay:main',
             'wander = perception_tools.wander:main',
+            'agent_mover = perception_tools.agent_mover:main',
         ],
     },
 )

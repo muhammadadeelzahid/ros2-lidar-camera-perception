@@ -2,14 +2,16 @@
 """Generate a randomized warehouse world for Gazebo.
 
 Each seed gives a different layout of shelves and pallets plus pedestrians and
-forklifts walking between free points. Used to build separate train / val / test
-scenarios so evaluation runs on layouts the detector has not seen.
+forklifts moving between free points. Writes the world and a matching
+.agents.yaml with the paths for agent_mover. Used to build separate train / val /
+test scenarios so evaluation runs on layouts the detector has not seen.
 
     ros2 run perception_tools generate_world --seed 7 --output worlds/scene_007.world
 """
 
 import argparse
 import math
+import os
 import random
 
 WALL_T = 0.2
@@ -152,41 +154,45 @@ def _walls(size_x, size_y):
     return ''.join(out)
 
 
-def _actor(name, kind, a, b, speed):
-    length = math.hypot(b[0] - a[0], b[1] - a[1])
-    t_leg = length / speed
-    yaw_ab = math.atan2(b[1] - a[1], b[0] - a[0])
-    yaw_ba = math.atan2(a[1] - b[1], a[0] - b[0])
-    turn = 0.5
-    waypoints = [
-        (0.0, a, yaw_ab),
-        (t_leg, b, yaw_ab),
-        (t_leg + turn, b, yaw_ba),
-        (2 * t_leg + turn, a, yaw_ba),
-        (2 * t_leg + 2 * turn, a, yaw_ab),
-    ]
-    wp = ''.join(
-        f'          <waypoint><time>{t:.2f}</time>'
-        f'<pose>{p[0]:.2f} {p[1]:.2f} 0 0 0 {yaw:.4f}</pose></waypoint>\n'
-        for t, p, yaw in waypoints)
-    if kind == 'pedestrian':
-        body = ('      <skin><filename>walk.dae</filename><scale>1.0</scale></skin>\n'
-                '      <animation name="walking"><filename>walk.dae</filename>'
-                '<interpolate_x>true</interpolate_x></animation>\n')
-        traj_type = 'walking'
-    else:
-        body = ('      <link name="body">\n'
-                '        <pose>0 0 0.7 0 0 0</pose>\n'
-                '        <visual name="v"><geometry><box><size>1.2 0.8 1.4</size></box>'
-                '</geometry>\n'
-                '          <material><ambient>0.8 0.5 0.1 1</ambient>'
-                '<diffuse>0.9 0.6 0.1 1</diffuse></material></visual>\n'
-                '      </link>\n')
-        traj_type = 'driving'
-    return (f'    <actor name="{name}">\n{body}'
-            f'      <script>\n        <loop>true</loop>\n        <auto_start>true</auto_start>\n'
-            f'        <trajectory id="0" type="{traj_type}">\n{wp}'
-            f'        </trajectory>\n      </script>\n    </actor>\n')
+PERSON_LINK = (
+    '        <collision name="torso_c"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder>'
+    '<radius>0.22</radius><length>1.5</length></cylinder></geometry></collision>\n'
+    '        <visual name="torso_v"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder>'
+    '<radius>0.22</radius><length>1.5</length></cylinder></geometry>'
+    '<material><ambient>0.2 0.6 0.2 1</ambient></material></visual>\n'
+    '        <collision name="head_c"><pose>0 0 1.65 0 0 0</pose><geometry><sphere>'
+    '<radius>0.13</radius></sphere></geometry></collision>\n'
+    '        <visual name="head_v"><pose>0 0 1.65 0 0 0</pose><geometry><sphere>'
+    '<radius>0.13</radius></sphere></geometry>'
+    '<material><ambient>0.9 0.75 0.6 1</ambient></material></visual>\n')
+
+FORKLIFT_LINK = (
+    '        <collision name="body_c"><pose>0 0 0.7 0 0 0</pose><geometry><box>'
+    '<size>1.2 0.8 1.4</size></box></geometry></collision>\n'
+    '        <visual name="body_v"><pose>0 0 0.7 0 0 0</pose><geometry><box>'
+    '<size>1.2 0.8 1.4</size></box></geometry>'
+    '<material><ambient>0.8 0.5 0.1 1</ambient></material></visual>\n')
+
+
+def _agent_model(name, kind, a, b):
+    yaw = math.atan2(b[1] - a[1], b[0] - a[0])
+    body = PERSON_LINK if kind == 'pedestrian' else FORKLIFT_LINK
+    return (f'    <model name="{name}">\n'
+            f'      <pose>{a[0]:.2f} {a[1]:.2f} 0 0 0 {yaw:.4f}</pose>\n'
+            f'      <link name="body">\n'
+            f'        <gravity>false</gravity>\n        <kinematic>true</kinematic>\n'
+            f'{body}      </link>\n    </model>\n')
+
+
+def agents_yaml(layout):
+    """Paths for agent_mover, matching the models in the generated world."""
+    lines = ['agents:']
+    for name, _, a, b, speed in layout.actors:
+        lines.append(f'  - name: {name}')
+        lines.append(f'    speed: {speed:.2f}')
+        lines.append('    mode: pingpong')
+        lines.append(f'    waypoints: [[{a[0]:.2f}, {a[1]:.2f}], [{b[0]:.2f}, {b[1]:.2f}]]')
+    return '\n'.join(lines) + '\n'
 
 
 def build_world(layout):
@@ -205,8 +211,8 @@ def build_world(layout):
         parts.append(_box_model(f'shelf_{i + 1}', box, 2.0, '0.6 0.5 0.35'))
     for i, box in enumerate(layout.pallets):
         parts.append(_box_model(f'pallet_{i + 1}', box, 0.6, '0.55 0.45 0.3'))
-    for actor in layout.actors:
-        parts.append(_actor(*actor))
+    for name, kind, a, b, _ in layout.actors:
+        parts.append(_agent_model(name, kind, a, b))
     parts.append('  </world>\n</sdf>\n')
     return ''.join(parts)
 
@@ -240,8 +246,11 @@ def main(argv=None):
         args.pedestrians, args.vehicles, (args.spawn_x, args.spawn_y))
     with open(args.output, 'w') as fh:
         fh.write(world)
-    print(f'wrote {args.output}: {len(layout.shelves)} shelves, '
-          f'{len(layout.pallets)} pallets, {len(layout.actors)} actors')
+    agents_path = os.path.splitext(args.output)[0] + '.agents.yaml'
+    with open(agents_path, 'w') as fh:
+        fh.write(agents_yaml(layout))
+    print(f'wrote {args.output} and {agents_path}: {len(layout.shelves)} shelves, '
+          f'{len(layout.pallets)} pallets, {len(layout.actors)} moving objects')
 
 
 if __name__ == '__main__':
