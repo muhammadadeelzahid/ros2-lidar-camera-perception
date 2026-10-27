@@ -8,6 +8,8 @@ position error against range.
 """
 
 import argparse
+import bisect
+import collections
 import math
 import os
 
@@ -24,7 +26,7 @@ from rclpy.node import Node  # noqa: E402
 from gazebo_msgs.msg import ModelStates  # noqa: E402
 from nav_msgs.msg import Odometry  # noqa: E402
 from sensor_msgs.msg import PointCloud2  # noqa: E402
-from sensor_msgs_py import point_cloud2  # noqa: E402
+from lidar_object_detection.cloud import cloud_to_xyz  # noqa: E402
 
 from perception_msgs.msg import TrackedObjectArray  # noqa: E402
 
@@ -32,6 +34,10 @@ from perception_tools.classes import classify  # noqa: E402
 from perception_tools.geometry import yaw_from_quaternion  # noqa: E402
 
 EGO_MODEL = 'ego_bot'
+
+
+def stamp_s(stamp):
+    return stamp.sec + stamp.nanosec * 1e-9
 
 
 def to_ego(ex, ey, eyaw, px, py):
@@ -46,13 +52,14 @@ class Evaluator(Node):
         super().__init__('eval_metrics')
         self.match_gate = match_gate
         self.min_points = min_points
-        self.cloud = None
         self.max_range = max_range
         self.output_dir = output_dir
 
-        self.ego_world = None   # (x, y, yaw) from model_states
-        self.ego_odom = None    # (x, y, yaw) from /odom
-        self.gt = {}            # name -> (x, y) ego frame
+        # Short histories so each /tracks message is scored against the ground
+        # truth, odometry and scan from the same moment, not the latest ones.
+        self.gt_hist = collections.deque(maxlen=250)     # (t, {name: (x, y)} ego frame)
+        self.odom_hist = collections.deque(maxlen=250)   # (t, (x, y, yaw))
+        self.cloud_hist = collections.deque(maxlen=20)   # (t, PointCloud2)
         self.last_match = {}    # gt name -> track_id
 
         self.errors = []        # (range, position_error)
@@ -76,7 +83,6 @@ class Evaluator(Node):
         ep = msg.pose[msg.name.index(EGO_MODEL)]
         eyaw = yaw_from_quaternion(ep.orientation.x, ep.orientation.y,
                                    ep.orientation.z, ep.orientation.w)
-        self.ego_world = (ep.position.x, ep.position.y, eyaw)
         gt = {}
         for name, pose in zip(msg.name, msg.pose):
             if classify(name) is None:
@@ -85,48 +91,59 @@ class Evaluator(Node):
                          pose.position.x, pose.position.y)
             if math.hypot(*rel) <= self.max_range:
                 gt[name] = rel
-        self.gt = gt
+        self.gt_hist.append((self.get_clock().now().nanoseconds * 1e-9, gt))
 
     def on_odom(self, msg):
         p = msg.pose.pose
         yaw = yaw_from_quaternion(p.orientation.x, p.orientation.y,
                                   p.orientation.z, p.orientation.w)
-        self.ego_odom = (p.position.x, p.position.y, yaw)
+        self.odom_hist.append((stamp_s(msg.header.stamp), (p.position.x, p.position.y, yaw)))
 
     def on_cloud(self, msg):
-        self.cloud = msg
+        self.cloud_hist.append((stamp_s(msg.header.stamp), msg))
 
-    def visible(self):
+    @staticmethod
+    def nearest(hist, t, max_dt=0.2):
+        if not hist:
+            return None
+        times = [h[0] for h in hist]
+        i = bisect.bisect_left(times, t)
+        best = min((j for j in (i - 1, i) if 0 <= j < len(hist)),
+                   key=lambda j: abs(times[j] - t))
+        return hist[best][1] if abs(times[best] - t) <= max_dt else None
+
+    def visible(self, gt, cloud):
         """Ground-truth objects with enough LiDAR returns to be detectable.
 
         The LiDAR sits above the base with no horizontal offset, so the ego frame
         and the sensor frame share x and y.
         """
-        if self.min_points <= 0 or self.cloud is None:
-            return dict(self.gt)
-        raw = point_cloud2.read_points(self.cloud, field_names=('x', 'y', 'z'),
-                                       skip_nans=True)
-        pts = np.array([[p[0], p[1], p[2]] for p in raw], dtype=float)
+        if self.min_points <= 0 or cloud is None:
+            return dict(gt)
+        pts = cloud_to_xyz(cloud)
         if pts.shape[0] == 0:
             return {}
         pts = pts[pts[:, 2] > -0.2]
         out = {}
-        for name, (x, y) in self.gt.items():
+        for name, (x, y) in gt.items():
             near = np.hypot(pts[:, 0] - x, pts[:, 1] - y) < 0.7
             if int(near.sum()) >= self.min_points:
                 out[name] = (x, y)
         return out
 
     def on_tracks(self, msg):
-        if self.ego_odom is None or not self.gt:
+        t = stamp_s(msg.header.stamp)
+        gt = self.nearest(self.gt_hist, t)
+        ego = self.nearest(self.odom_hist, t)
+        if gt is None or ego is None or not gt:
             return
-        ex, ey, eyaw = self.ego_odom
+        ex, ey, eyaw = ego
         tracks = []
         for o in msg.objects:
             rel = to_ego(ex, ey, eyaw, o.pose.position.x, o.pose.position.y)
             tracks.append((o.track_id, rel))
 
-        gt = self.visible()
+        gt = self.visible(gt, self.nearest(self.cloud_hist, t))
         self.frames += 1
         self.recall_den += len(gt)
         self.prec_den += len(tracks)
