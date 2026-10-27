@@ -48,6 +48,13 @@ class OpenPCDetBackend:
                                          to_cpu=True)
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.model.to(self.device).eval()
+        # The first forward pass builds CUDA kernels and can take many seconds;
+        # do it now instead of on the first live scan.
+        rng = np.random.default_rng(0)
+        warmup = np.zeros((2000, 4), dtype=np.float32)
+        warmup[:, :2] = rng.uniform(-10.0, 10.0, (2000, 2))
+        warmup[:, 2] = rng.uniform(0.0, 1.5, 2000)
+        self.infer(warmup)
 
     def infer(self, cloud):
         from pcdet.models import load_data_to_gpu
