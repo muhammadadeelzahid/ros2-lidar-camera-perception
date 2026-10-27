@@ -24,5 +24,5 @@ fallback:
   max_z: 2.0               # drop points above this height (m)
   max_range: 15.0          # ignore returns beyond this range (m)
   cluster_eps: 0.5         # neighbour radius for clustering (m)
-  min_points: 15           # minimum points per cluster
+  min_points: 10           # minimum points per cluster
   fixed_score: 0.5         # score given to clustered detections

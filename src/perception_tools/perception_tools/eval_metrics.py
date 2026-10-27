@@ -2,8 +2,9 @@
 """Evaluate the perception pipeline against simulator ground truth.
 
 Compares /tracks with the true object poses from /gazebo/model_states, both in the
-ego frame. On Ctrl-C it prints recall, precision, position error and ID switches, and
-writes a plot of position error against range.
+ego frame. Objects hidden from the LiDAR are not counted against recall. On Ctrl-C
+it prints recall, precision, position error and ID switches, and writes a plot of
+position error against range.
 """
 
 import argparse
@@ -17,10 +18,13 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 import rclpy  # noqa: E402
+from rclpy.executors import ExternalShutdownException  # noqa: E402
 from rclpy.node import Node  # noqa: E402
 
 from gazebo_msgs.msg import ModelStates  # noqa: E402
 from nav_msgs.msg import Odometry  # noqa: E402
+from sensor_msgs.msg import PointCloud2  # noqa: E402
+from sensor_msgs_py import point_cloud2  # noqa: E402
 
 from perception_msgs.msg import TrackedObjectArray  # noqa: E402
 
@@ -38,9 +42,11 @@ def to_ego(ex, ey, eyaw, px, py):
 
 class Evaluator(Node):
 
-    def __init__(self, match_gate, max_range, output_dir):
+    def __init__(self, match_gate, max_range, output_dir, min_points):
         super().__init__('eval_metrics')
         self.match_gate = match_gate
+        self.min_points = min_points
+        self.cloud = None
         self.max_range = max_range
         self.output_dir = output_dir
 
@@ -61,6 +67,7 @@ class Evaluator(Node):
                                  self.on_states, 10)
         self.create_subscription(Odometry, '/odom', self.on_odom, 10)
         self.create_subscription(TrackedObjectArray, '/tracks', self.on_tracks, 10)
+        self.create_subscription(PointCloud2, '/points', self.on_cloud, 2)
         self.get_logger().info('evaluating; press Ctrl-C for the report')
 
     def on_states(self, msg):
@@ -86,6 +93,30 @@ class Evaluator(Node):
                                   p.orientation.z, p.orientation.w)
         self.ego_odom = (p.position.x, p.position.y, yaw)
 
+    def on_cloud(self, msg):
+        self.cloud = msg
+
+    def visible(self):
+        """Ground-truth objects with enough LiDAR returns to be detectable.
+
+        The LiDAR sits above the base with no horizontal offset, so the ego frame
+        and the sensor frame share x and y.
+        """
+        if self.min_points <= 0 or self.cloud is None:
+            return dict(self.gt)
+        raw = point_cloud2.read_points(self.cloud, field_names=('x', 'y', 'z'),
+                                       skip_nans=True)
+        pts = np.array([[p[0], p[1], p[2]] for p in raw], dtype=float)
+        if pts.shape[0] == 0:
+            return {}
+        pts = pts[pts[:, 2] > -0.2]
+        out = {}
+        for name, (x, y) in self.gt.items():
+            near = np.hypot(pts[:, 0] - x, pts[:, 1] - y) < 0.7
+            if int(near.sum()) >= self.min_points:
+                out[name] = (x, y)
+        return out
+
     def on_tracks(self, msg):
         if self.ego_odom is None or not self.gt:
             return
@@ -95,12 +126,13 @@ class Evaluator(Node):
             rel = to_ego(ex, ey, eyaw, o.pose.position.x, o.pose.position.y)
             tracks.append((o.track_id, rel))
 
+        gt = self.visible()
         self.frames += 1
-        self.recall_den += len(self.gt)
+        self.recall_den += len(gt)
         self.prec_den += len(tracks)
 
         used = set()
-        for name, g in self.gt.items():
+        for name, g in gt.items():
             best, best_d = None, self.match_gate
             for i, (tid, rel) in enumerate(tracks):
                 if i in used:
@@ -149,13 +181,15 @@ def main(argv=None):
     parser.add_argument('--match-gate', type=float, default=2.0)
     parser.add_argument('--max-range', type=float, default=15.0)
     parser.add_argument('--output-dir', default='analysis_output')
+    parser.add_argument('--min-points', type=int, default=5,
+                        help='ignore objects with fewer LiDAR returns (occluded)')
     args, ros_args = parser.parse_known_args(argv)
 
     rclpy.init(args=ros_args)
-    node = Evaluator(args.match_gate, args.max_range, args.output_dir)
+    node = Evaluator(args.match_gate, args.max_range, args.output_dir, args.min_points)
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.report()

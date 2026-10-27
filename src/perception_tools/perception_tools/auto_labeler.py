@@ -3,7 +3,8 @@
 
 For each LiDAR frame, reads the true poses of pedestrians and vehicles from
 /gazebo/model_states and writes the point cloud with a label file of 3D boxes in the
-LiDAR frame, one box per line: class x y z dx dy dz heading.
+LiDAR frame, one box per line: class x y z dx dy dz heading. Objects with fewer than
+min_points returns inside their box are left out, since the sensor cannot see them.
 """
 
 import math
@@ -12,6 +13,7 @@ import os
 import numpy as np
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 from gazebo_msgs.msg import ModelStates
@@ -27,6 +29,17 @@ LIDAR_Z_ABOVE_FOOTPRINT = 0.135 + 0.195
 EGO_MODEL = 'ego_bot'
 
 
+def points_in_box(pts, box, margin=0.1):
+    """Count points inside an oriented box (x, y, z, dx, dy, dz, heading)."""
+    x, y, z, dx, dy, dz, heading = box
+    c, s = math.cos(-heading), math.sin(-heading)
+    px, py = pts[:, 0] - x, pts[:, 1] - y
+    lx, ly = c * px - s * py, s * px + c * py
+    inside = ((np.abs(lx) <= dx / 2.0 + margin) & (np.abs(ly) <= dy / 2.0 + margin) &
+              (np.abs(pts[:, 2] - z) <= dz / 2.0))
+    return int(inside.sum())
+
+
 class AutoLabeler(Node):
 
     def __init__(self):
@@ -34,6 +47,8 @@ class AutoLabeler(Node):
         self.out_dir = self.declare_parameter('out_dir', 'dataset').value
         self.ego_model = self.declare_parameter('ego_model', EGO_MODEL).value
         self.max_range = self.declare_parameter('max_range', 30.0).value
+        # Objects with fewer returns than this are hidden or too far to learn from.
+        self.min_points = self.declare_parameter('min_points', 5).value
         self.stride = self.declare_parameter('frame_stride', 3).value
 
         self.points_dir = os.path.join(self.out_dir, 'points')
@@ -99,7 +114,8 @@ class AutoLabeler(Node):
         intensity = np.zeros((pts.shape[0], 1), dtype=np.float32)
         cloud = np.hstack([pts, intensity])
 
-        rows = self.labels_in_lidar_frame(lidar)
+        rows = [r for r in self.labels_in_lidar_frame(lidar)
+                if points_in_box(pts, r[1:]) >= self.min_points]
         name = f'{self.saved:06d}'
         np.save(os.path.join(self.points_dir, name + '.npy'), cloud)
         with open(os.path.join(self.labels_dir, name + '.txt'), 'w') as fh:
@@ -116,7 +132,7 @@ def main(argv=None):
     node = AutoLabeler()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.get_logger().info(f'done: {node.saved} frames in {node.out_dir}')
