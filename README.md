@@ -145,17 +145,25 @@ ros2 launch perception_bringup sim.launch.py detector_config:=/path/to/pointpill
 A model trained on another dataset can be used too; its classes are mapped onto ours
 through `class_aliases`.
 
-Results on the default warehouse, a layout not used for training (1,143 frames,
+Results on the default warehouse, a layout not used for training (1,141 frames,
 objects within 15 m, a detection counts when its centre is within 1 m):
 
 | Detector | Recall | Precision | False positives / frame | Centre error | Class accuracy |
 |---|---|---|---|---|---|
-| Clustering | 0.88 | 0.30 | 2.57 | 0.22 m | 0.84 |
-| PointPillars, score >= 0.3 | 0.95 | 0.59 | 0.84 | 0.05 m | 0.98 |
-| PointPillars, score >= 0.5 | 0.87 | 0.76 | 0.34 | 0.04 m | 0.99 |
+| Clustering | 0.85 | 0.27 | 2.45 | 0.24 m | 0.84 |
+| PointPillars v1, score >= 0.3 | 0.96 | 0.55 | 0.82 | 0.05 m | 0.98 |
+| PointPillars v1, score >= 0.5 | 0.86 | 0.70 | 0.39 | 0.04 m | 0.99 |
+| PointPillars v2, score >= 0.3 | 0.94 | 0.75 | 0.32 | 0.04 m | 0.99 |
+| PointPillars v2, score >= 0.5 | 0.81 | 0.95 | 0.04 | 0.03 m | 1.00 |
 
-The model was trained from scratch on 7,175 frames from 17 generated warehouses
-(40 epochs, 43 minutes on one L40S) and runs in about 4 ms per scan on that GPU.
+Both models were trained from scratch for 40 epochs (about 45 minutes on one L40S)
+and run in about 4 ms per scan on that GPU. v1 was trained on 7,175 frames from 17
+generated warehouses with shelves and pallets only. Most of its false positives were
+the two pillars in the test warehouse, detected as pedestrians (350 of 449 at score
+0.5), and shelf ends. v2 adds 2 to 5 square or round posts to every generated world
+(7,410 training frames); its false positives at score 0.5 dropped to 48, of which
+4 are on the pillars.
+
 Reproduce the numbers with:
 
 ```bash
@@ -165,6 +173,27 @@ ros2 run perception_tools eval_detector --data dataset/warehouse --config <detec
 These are simulation results. A model trained only on simulated data will not
 transfer directly to a real LiDAR; fine-tune and evaluate on a labeled set recorded
 with the target sensor.
+
+## Closed-loop test
+
+The full pipeline in the default warehouse, with `wander` driving the robot through
+the collision monitor for 150 s while a forklift and two pedestrians move along
+their paths:
+
+| Detector | Recall | Precision | Track error | Detection time | Phantom critical warnings | Distance driven |
+|---|---|---|---|---|---|---|
+| Clustering | 0.79 | 0.28 | 0.44 m | 10 ms | 1267 | 2.4 m |
+| PointPillars v1 | 0.94 | 0.67 | 0.14 m | 6 ms | 1230 | 3.2 m |
+| PointPillars v2 | 0.91 | 0.82 | 0.13 m | 6 ms | 0 | 37.2 m |
+
+A phantom warning is a critical warning on a track with no real object near it.
+With clustering and v1 these kept the robot in emergency stop for most of the run;
+with v2 the stops were all for real objects or the protective field. The robot did
+not drive into anything in any of the runs.
+
+The monitor also holds the robot stopped while no tracks are arriving (more than
+`tracks_timeout`, 0.5 s), which covers the detector loading its model at startup or
+crashing.
 
 ## Evaluation
 
