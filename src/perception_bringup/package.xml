@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>perception_bringup</name>
+  <version>0.1.0</version>
+  <description>Launch files and configuration for simulation and the physical robot.</description>
+  <maintainer email="adeel.m.zahid@gmail.com">Muhammad Adeel Zahid</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>perception_sim</exec_depend>
+  <exec_depend>lidar_object_detection</exec_depend>
+  <exec_depend>camera_detection</exec_depend>
+  <exec_depend>fusion_tracking</exec_depend>
+  <exec_depend>collision_monitor</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>velodyne_driver</exec_depend>
+  <exec_depend>velodyne_pointcloud</exec_depend>
+  <exec_depend>usb_cam</exec_depend>
+  <exec_depend>realsense2_camera</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

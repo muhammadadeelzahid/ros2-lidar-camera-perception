@@ -1,0 +1,32 @@
+/lidar_detector:
+  ros__parameters:
+    # Leave empty to use the frame_id from the point cloud.
+    lidar_frame: ''
+
+/camera_detector:
+  ros__parameters:
+    weights: yolov8n.pt
+    conf: 0.4
+
+/fusion_tracker:
+  ros__parameters:
+    # Frame the tracks are kept in. Use odom when the base publishes odometry,
+    # or the base frame for a sensor rig without odometry.
+    tracking_frame: odom
+    gate_distance: 2.0
+    max_age: 1.0
+    min_hits: 3
+
+/collision_monitor:
+  ros__parameters:
+    # Set false when there is no odometry; tracks are then treated as
+    # relative to the vehicle (tracking_frame must be the base frame).
+    use_odom: true
+    ego_length: 0.4
+    ego_width: 0.3
+    enable_estop: true
+    crit_dist: 0.5
+    warn_dist: 1.5
+    info_dist: 3.0
+    crit_ttc: 1.0
+    warn_ttc: 3.0

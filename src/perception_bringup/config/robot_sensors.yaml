@@ -1,0 +1,13 @@
+# Sensor mounting on the physical robot, relative to base_frame.
+# Measure these on your vehicle; xyz in metres, rpy in radians.
+base_frame: base_link
+
+lidar:
+  frame: lidar3d_link
+  xyz: [0.0, 0.0, 0.40]
+  rpy: [0.0, 0.0, 0.0]
+
+camera:
+  frame: camera_link
+  xyz: [0.20, 0.0, 0.25]
+  rpy: [0.0, 0.0, 0.0]
