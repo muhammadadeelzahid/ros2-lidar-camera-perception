@@ -133,13 +133,12 @@ ros2 run perception_tools dataset_export --input dataset --output pcdet_dataset
 
 # train on a CUDA machine with OpenPCDet installed
 python3 -m perception_tools.train --data pcdet_dataset \
-  --cfg OpenPCDet/tools/cfgs/custom_models/pointpillar.yaml \
-  --pretrained pointpillar_7728.pth
+  --cfg src/lidar_object_detection/config/pcdet/pointpillar_warehouse.yaml
 ```
 
-Then set `openpcdet_cfg` and `checkpoint` in
-`lidar_object_detection/config/pointpillars.yaml`. Classes from a pretrained model
-are mapped onto ours through `class_aliases`.
+Then set `openpcdet_cfg` to that file and `checkpoint` to the trained model in
+`lidar_object_detection/config/pointpillars.yaml`. A model trained on another
+dataset can be used too; its classes are mapped onto ours through `class_aliases`.
 
 A model trained only on simulated data will not transfer directly to a real LiDAR.
 Fine-tune and evaluate on a labeled set recorded with the target sensor.
