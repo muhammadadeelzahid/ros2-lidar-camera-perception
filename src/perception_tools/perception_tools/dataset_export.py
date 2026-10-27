@@ -5,6 +5,10 @@ Each scenario is a directory written by auto_labeler:
     <scenario>/points/000000.npy   (N, 4) float32 x y z intensity, sensor frame
     <scenario>/labels/000000.txt   class x y z dx dy dz heading
 
+Labels are rewritten in OpenPCDet's order, x y z dx dy dz heading class. Frames
+with no visible objects are skipped unless --keep-empty is given; OpenPCDet's
+loader does not accept empty label files.
+
 Whole scenarios are assigned to train, val or test. Consecutive frames from one
 recording are nearly identical, so splitting frame by frame would leak training
 data into the evaluation sets.
@@ -17,6 +21,12 @@ import argparse
 import os
 import random
 import shutil
+
+
+def to_pcdet(line):
+    """'class x y z dx dy dz heading' -> 'x y z dx dy dz heading class'."""
+    parts = line.split()
+    return ' '.join(parts[1:8] + parts[:1]) + '\n'
 
 
 def find_scenarios(paths):
@@ -48,7 +58,7 @@ def split_scenarios(names, val_frac, test_frac, seed):
     return train, val, test
 
 
-def export(scenarios, output, val_frac=0.15, test_frac=0.15, seed=0):
+def export(scenarios, output, val_frac=0.15, test_frac=0.15, seed=0, keep_empty=False):
     out_points = os.path.join(output, 'points')
     out_labels = os.path.join(output, 'labels')
     image_sets = os.path.join(output, 'ImageSets')
@@ -65,11 +75,17 @@ def export(scenarios, output, val_frac=0.15, test_frac=0.15, seed=0):
                     continue
                 fid = f[:-4]
                 out_id = f'{name}_{fid}'
+                label = os.path.join(src, 'labels', fid + '.txt')
+                lines = []
+                if os.path.exists(label):
+                    with open(label) as fh:
+                        lines = [to_pcdet(line) for line in fh if line.strip()]
+                if not lines and not keep_empty:
+                    continue
                 shutil.copy(os.path.join(src, 'points', f),
                             os.path.join(out_points, out_id + '.npy'))
-                label = os.path.join(src, 'labels', fid + '.txt')
-                if os.path.exists(label):
-                    shutil.copy(label, os.path.join(out_labels, out_id + '.txt'))
+                with open(os.path.join(out_labels, out_id + '.txt'), 'w') as fh:
+                    fh.write(''.join(lines))
                 sets[split].append(out_id)
 
     for split, ids in sets.items():
@@ -87,6 +103,8 @@ def main(argv=None):
     parser.add_argument('--val-frac', type=float, default=0.15)
     parser.add_argument('--test-frac', type=float, default=0.15)
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--keep-empty', action='store_true',
+                        help='keep frames without any labeled object')
     args = parser.parse_args(argv)
 
     scenarios = find_scenarios(args.input)
@@ -96,7 +114,8 @@ def main(argv=None):
         print(f'warning: only {len(scenarios)} scenario(s); record more for a '
               'meaningful val/test split')
 
-    split, sets = export(scenarios, args.output, args.val_frac, args.test_frac, args.seed)
+    split, sets = export(scenarios, args.output, args.val_frac, args.test_frac,
+                         args.seed, args.keep_empty)
     for name in ('train', 'val', 'test'):
         print(f'{name}: {len(sets[name])} frames from {split[name]}')
 

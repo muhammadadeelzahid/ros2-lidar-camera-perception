@@ -3,7 +3,12 @@ import xml.dom.minidom
 
 import numpy as np
 
-from perception_tools.dataset_export import export, find_scenarios, split_scenarios
+from perception_tools.dataset_export import (
+    export,
+    find_scenarios,
+    split_scenarios,
+    to_pcdet,
+)
 from perception_tools.generate_world import generate
 
 
@@ -52,3 +57,21 @@ def test_export_writes_image_sets(tmp_path):
     with open(os.path.join(out, 'ImageSets', 'test.txt')) as fh:
         test_ids = fh.read().split()
     assert all(i.startswith(split['test'][0]) for i in test_ids)
+    with open(os.path.join(out, 'labels', test_ids[0] + '.txt')) as fh:
+        assert fh.read().split()[-1] == 'Pedestrian'
+
+
+def test_label_reordered_for_openpcdet():
+    line = 'Vehicle 1.0 2.0 0.3 1.2 0.8 1.4 0.5\n'
+    assert to_pcdet(line) == '1.0 2.0 0.3 1.2 0.8 1.4 0.5 Vehicle\n'
+
+
+def test_export_skips_empty_frames(tmp_path):
+    root = str(tmp_path / 'dataset')
+    for i in range(3):
+        _write_scenario(root, f'scene_{i}', frames=2)
+    open(os.path.join(root, 'scene_0', 'labels', '000000.txt'), 'w').close()
+    _, sets = export(find_scenarios([root]), str(tmp_path / 'a'), 0.0, 0.0)
+    assert sum(len(v) for v in sets.values()) == 5
+    _, sets = export(find_scenarios([root]), str(tmp_path / 'b'), 0.0, 0.0, keep_empty=True)
+    assert sum(len(v) for v in sets.values()) == 6
