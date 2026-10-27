@@ -154,21 +154,27 @@ def _walls(size_x, size_y):
     return ''.join(out)
 
 
+# Moving objects are seen by the LiDAR but exert no contact forces; as kinematic
+# bodies they would otherwise shove the robot around.
+NO_CONTACT = ('<surface><contact><collide_without_contact>true'
+              '</collide_without_contact></contact></surface>')
+
 PERSON_LINK = (
     '        <collision name="torso_c"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder>'
-    '<radius>0.22</radius><length>1.5</length></cylinder></geometry></collision>\n'
+    '<radius>0.22</radius><length>1.5</length></cylinder></geometry>' + NO_CONTACT +
+    '</collision>\n'
     '        <visual name="torso_v"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder>'
     '<radius>0.22</radius><length>1.5</length></cylinder></geometry>'
     '<material><ambient>0.2 0.6 0.2 1</ambient></material></visual>\n'
     '        <collision name="head_c"><pose>0 0 1.65 0 0 0</pose><geometry><sphere>'
-    '<radius>0.13</radius></sphere></geometry></collision>\n'
+    '<radius>0.13</radius></sphere></geometry>' + NO_CONTACT + '</collision>\n'
     '        <visual name="head_v"><pose>0 0 1.65 0 0 0</pose><geometry><sphere>'
     '<radius>0.13</radius></sphere></geometry>'
     '<material><ambient>0.9 0.75 0.6 1</ambient></material></visual>\n')
 
 FORKLIFT_LINK = (
     '        <collision name="body_c"><pose>0 0 0.7 0 0 0</pose><geometry><box>'
-    '<size>1.2 0.8 1.4</size></box></geometry></collision>\n'
+    '<size>1.2 0.8 1.4</size></box></geometry>' + NO_CONTACT + '</collision>\n'
     '        <visual name="body_v"><pose>0 0 0.7 0 0 0</pose><geometry><box>'
     '<size>1.2 0.8 1.4</size></box></geometry>'
     '<material><ambient>0.8 0.5 0.1 1</ambient></material></visual>\n')

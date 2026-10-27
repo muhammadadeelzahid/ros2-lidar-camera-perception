@@ -112,10 +112,10 @@
       <link name="body">
         <gravity>false</gravity>
         <kinematic>true</kinematic>
-        <collision name="torso_c"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>1.5</length></cylinder></geometry></collision>
+        <collision name="torso_c"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>1.5</length></cylinder></geometry><surface><contact><collide_without_contact>true</collide_without_contact></contact></surface></collision>
         <visual name="torso_v"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>1.5</length></cylinder></geometry>
           <material><ambient>0.2 0.6 0.2 1</ambient><diffuse>0.2 0.7 0.2 1</diffuse></material></visual>
-        <collision name="head_c"><pose>0 0 1.65 0 0 0</pose><geometry><sphere><radius>0.13</radius></sphere></geometry></collision>
+        <collision name="head_c"><pose>0 0 1.65 0 0 0</pose><geometry><sphere><radius>0.13</radius></sphere></geometry><surface><contact><collide_without_contact>true</collide_without_contact></contact></surface></collision>
         <visual name="head_v"><pose>0 0 1.65 0 0 0</pose><geometry><sphere><radius>0.13</radius></sphere></geometry>
           <material><ambient>0.9 0.75 0.6 1</ambient><diffuse>0.9 0.75 0.6 1</diffuse></material></visual>
       </link>
@@ -125,10 +125,10 @@
       <link name="body">
         <gravity>false</gravity>
         <kinematic>true</kinematic>
-        <collision name="torso_c"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>1.5</length></cylinder></geometry></collision>
+        <collision name="torso_c"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>1.5</length></cylinder></geometry><surface><contact><collide_without_contact>true</collide_without_contact></contact></surface></collision>
         <visual name="torso_v"><pose>0 0 0.75 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>1.5</length></cylinder></geometry>
           <material><ambient>0.2 0.3 0.7 1</ambient><diffuse>0.2 0.3 0.8 1</diffuse></material></visual>
-        <collision name="head_c"><pose>0 0 1.65 0 0 0</pose><geometry><sphere><radius>0.13</radius></sphere></geometry></collision>
+        <collision name="head_c"><pose>0 0 1.65 0 0 0</pose><geometry><sphere><radius>0.13</radius></sphere></geometry><surface><contact><collide_without_contact>true</collide_without_contact></contact></surface></collision>
         <visual name="head_v"><pose>0 0 1.65 0 0 0</pose><geometry><sphere><radius>0.13</radius></sphere></geometry>
           <material><ambient>0.9 0.75 0.6 1</ambient><diffuse>0.9 0.75 0.6 1</diffuse></material></visual>
       </link>
@@ -138,7 +138,7 @@
       <link name="body">
         <gravity>false</gravity>
         <kinematic>true</kinematic>
-        <collision name="body_c"><pose>0 0 0.7 0 0 0</pose><geometry><box><size>1.2 0.8 1.4</size></box></geometry></collision>
+        <collision name="body_c"><pose>0 0 0.7 0 0 0</pose><geometry><box><size>1.2 0.8 1.4</size></box></geometry><surface><contact><collide_without_contact>true</collide_without_contact></contact></surface></collision>
         <visual name="body_v"><pose>0 0 0.7 0 0 0</pose><geometry><box><size>1.2 0.8 1.4</size></box></geometry>
           <material><ambient>0.8 0.5 0.1 1</ambient><diffuse>0.9 0.6 0.1 1</diffuse></material></visual>
       </link>
