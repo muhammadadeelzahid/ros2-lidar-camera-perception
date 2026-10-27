@@ -1,0 +1,28 @@
+# 3D detector settings.
+#
+# With openpcdet_cfg and checkpoint set (and OpenPCDet installed) the node runs the
+# trained network. Otherwise it uses the clustering detector below.
+
+class_names: [Pedestrian, Vehicle]
+
+point_cloud_range: [-30.0, -30.0, -1.0, 30.0, 30.0, 3.0]  # xmin ymin zmin xmax ymax zmax
+
+openpcdet_cfg: ''          # OpenPCDet model config, e.g. cfgs/custom_models/pointpillar.yaml
+checkpoint: ''             # trained .pth file
+score_threshold: 0.3
+
+# Rename checkpoint classes to ours. Anything not in class_names is dropped.
+class_aliases:
+  Car: Vehicle
+  Truck: Vehicle
+  Bus: Vehicle
+
+# Clustering detector
+fallback:
+  voxel_size: 0.1          # downsample leaf size (m)
+  ground_z: -0.15          # keep points above this height in the sensor frame (m)
+  max_z: 2.0               # drop points above this height (m)
+  max_range: 15.0          # ignore returns beyond this range (m)
+  cluster_eps: 0.5         # neighbour radius for clustering (m)
+  min_points: 15           # minimum points per cluster
+  fixed_score: 0.5         # score given to clustered detections
