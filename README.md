@@ -117,9 +117,7 @@ ros2 run perception_tools lidar_camera_overlay
 
 ## Detector training
 
-Without a trained model the LiDAR detector uses Euclidean clustering. In the default
-warehouse it finds about 60% of visible objects within 15 m, with 0.15 m centre error
-and 0.85 false positives per frame, mostly pillars and shelf ends. To train a
+Without a trained model the LiDAR detector uses Euclidean clustering. To train a
 PointPillars model with OpenPCDet:
 
 ```bash
@@ -140,8 +138,26 @@ Then set `openpcdet_cfg` to that file and `checkpoint` to the trained model in
 `lidar_object_detection/config/pointpillars.yaml`. A model trained on another
 dataset can be used too; its classes are mapped onto ours through `class_aliases`.
 
-A model trained only on simulated data will not transfer directly to a real LiDAR.
-Fine-tune and evaluate on a labeled set recorded with the target sensor.
+Results on the default warehouse, a layout not used for training (1,143 frames,
+objects within 15 m, a detection counts when its centre is within 1 m):
+
+| Detector | Recall | Precision | False positives / frame | Centre error | Class accuracy |
+|---|---|---|---|---|---|
+| Clustering | 0.88 | 0.30 | 2.57 | 0.22 m | 0.84 |
+| PointPillars, score >= 0.3 | 0.95 | 0.59 | 0.84 | 0.05 m | 0.98 |
+| PointPillars, score >= 0.5 | 0.87 | 0.76 | 0.34 | 0.04 m | 0.99 |
+
+The model was trained from scratch on 7,175 frames from 17 generated warehouses
+(40 epochs, 43 minutes on one L40S) and runs in about 4 ms per scan on that GPU.
+Reproduce the numbers with:
+
+```bash
+ros2 run perception_tools eval_detector --data dataset/warehouse --config <detector config>
+```
+
+These are simulation results. A model trained only on simulated data will not
+transfer directly to a real LiDAR; fine-tune and evaluate on a labeled set recorded
+with the target sensor.
 
 ## Evaluation
 
