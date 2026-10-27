@@ -52,7 +52,10 @@ def generate_launch_description():
     perception = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(bringup, 'launch', 'perception.launch.py')),
-        launch_arguments={'use_sim_time': 'true'}.items(),
+        launch_arguments={
+            'use_sim_time': 'true',
+            'detector_config': LaunchConfiguration('detector_config'),
+        }.items(),
     )
 
     rviz = Node(
@@ -68,6 +71,10 @@ def generate_launch_description():
                 [FindPackageShare('perception_sim'), 'worlds', 'warehouse.world'])),
         DeclareLaunchArgument('agents', default_value='',
                               description='agent paths, defaults to <world>.agents.yaml'),
+        DeclareLaunchArgument(
+            'detector_config',
+            default_value=PathJoinSubstitution(
+                [FindPackageShare('lidar_object_detection'), 'config', 'pointpillars.yaml'])),
         DeclareLaunchArgument('gui', default_value='true'),
         DeclareLaunchArgument('rviz', default_value='true'),
         DeclareLaunchArgument('x', default_value='-8.0'),

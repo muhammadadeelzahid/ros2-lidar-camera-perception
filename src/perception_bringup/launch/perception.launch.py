@@ -15,7 +15,8 @@ def generate_launch_description():
 
     detector = Node(
         package='lidar_object_detection', executable='detector_node',
-        name='lidar_detector', output='screen', parameters=common,
+        name='lidar_detector', output='screen',
+        parameters=common + [{'config': LaunchConfiguration('detector_config')}],
         remappings=[('/points', LaunchConfiguration('points_topic'))])
 
     camera = Node(
@@ -41,6 +42,11 @@ def generate_launch_description():
             'params_file',
             default_value=PathJoinSubstitution(
                 [FindPackageShare('perception_bringup'), 'config', 'perception.yaml'])),
+        DeclareLaunchArgument(
+            'detector_config',
+            default_value=PathJoinSubstitution(
+                [FindPackageShare('lidar_object_detection'), 'config', 'pointpillars.yaml']),
+            description='detector settings; set openpcdet_cfg and checkpoint to use PointPillars'),
         DeclareLaunchArgument('points_topic', default_value='/points'),
         DeclareLaunchArgument('image_topic', default_value='/camera/image_raw'),
         DeclareLaunchArgument('camera_info_topic', default_value='/camera/camera_info'),

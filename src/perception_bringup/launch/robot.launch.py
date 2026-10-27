@@ -114,6 +114,7 @@ def launch_setup(context, *args, **kwargs):
             'camera_info_topic': info_topic,
             'odom_topic': arg('odom_topic'),
             'use_camera': use_camera,
+            'detector_config': arg('detector_config'),
         }.items(),
     ))
 
@@ -146,6 +147,10 @@ def generate_launch_description():
         DeclareLaunchArgument('image_topic', default_value='/camera/image_raw'),
         DeclareLaunchArgument('camera_info_topic', default_value='/camera/camera_info'),
         DeclareLaunchArgument('odom_topic', default_value='/odom'),
+        DeclareLaunchArgument(
+            'detector_config',
+            default_value=os.path.join(get_package_share_directory('lidar_object_detection'),
+                                       'config', 'pointpillars.yaml')),
         DeclareLaunchArgument('rviz', default_value='false'),
         OpaqueFunction(function=launch_setup),
     ])

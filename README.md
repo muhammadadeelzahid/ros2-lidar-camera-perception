@@ -134,9 +134,16 @@ python3 -m perception_tools.train --data pcdet_dataset \
   --cfg src/lidar_object_detection/config/pcdet/pointpillar_warehouse.yaml
 ```
 
-Then set `openpcdet_cfg` to that file and `checkpoint` to the trained model in
-`lidar_object_detection/config/pointpillars.yaml`. A model trained on another
-dataset can be used too; its classes are mapped onto ours through `class_aliases`.
+To use the trained model, copy `lidar_object_detection/config/pointpillars.yaml`, set
+`openpcdet_cfg` to the training config and `checkpoint` to the trained model, and pass
+it at launch (torch and OpenPCDet must be importable by the ROS Python):
+
+```bash
+ros2 launch perception_bringup sim.launch.py detector_config:=/path/to/pointpillars_trained.yaml
+```
+
+A model trained on another dataset can be used too; its classes are mapped onto ours
+through `class_aliases`.
 
 Results on the default warehouse, a layout not used for training (1,143 frames,
 objects within 15 m, a detection counts when its centre is within 1 m):
