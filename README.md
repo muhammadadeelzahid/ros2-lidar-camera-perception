@@ -68,8 +68,8 @@ monitor, so the robot stops if a pedestrian or forklift gets too close.
 ./scripts/drive.sh
 ```
 
-To run in a randomly generated warehouse instead of the default one (each world
-comes with a matching `.agents.yaml`):
+Randomly generated warehouses can be used instead of the default one. Each world
+comes with a matching `.agents.yaml`.
 
 ```bash
 ./scripts/generate_scenarios.sh 20
@@ -83,15 +83,15 @@ and to accept `/cmd_vel`. Teleop or a planner should publish to `cmd_vel_in`.
 
 1. Measure where the LiDAR and camera are mounted and set the offsets in
    `perception_bringup/config/robot_sensors.yaml`.
-2. Calibrate the camera (see below) and point `camera_info_url` at the result.
+2. Calibrate the camera as described below and point `camera_info_url` at the result.
 3. Launch:
 
 ```bash
 ros2 launch perception_bringup robot.launch.py lidar:=velodyne camera:=usb
 ```
 
-Supported drivers are Velodyne (`lidar_model:=VLP16`, `VLP32C`, ...) for the LiDAR
-and usb_cam or RealSense for the camera. For other sensors run their driver
+Supported drivers are Velodyne for the LiDAR, set with `lidar_model:=VLP16`,
+`VLP32C` and so on, and usb_cam or RealSense for the camera. For other sensors run their driver
 separately and pass `lidar:=none points_topic:=...` or `camera:=none`. Without odometry,
 set `tracking_frame` to the base frame and `use_odom: false` in
 `perception_bringup/config/perception.yaml`. Set `base_frame`, `ego_length` and
@@ -136,7 +136,7 @@ python3 -m perception_tools.train --data pcdet_dataset \
 
 To use the trained model, copy `lidar_object_detection/config/pointpillars.yaml`, set
 `openpcdet_cfg` to the training config and `checkpoint` to the trained model, and pass
-it at launch (torch and OpenPCDet must be importable by the ROS Python):
+it at launch. torch and OpenPCDet must be importable by the ROS Python.
 
 ```bash
 ros2 launch perception_bringup sim.launch.py detector_config:=/path/to/pointpillars_trained.yaml
@@ -145,24 +145,21 @@ ros2 launch perception_bringup sim.launch.py detector_config:=/path/to/pointpill
 A model trained on another dataset can be used too; its classes are mapped onto ours
 through `class_aliases`.
 
-Results on the default warehouse, a layout not used for training (1,141 frames,
-objects within 15 m, a detection counts when its centre is within 1 m):
+Results on the default warehouse, a layout not used for training. The test set has
+1,141 frames, objects within 15 m are counted, and a detection is correct when its
+centre is within 1 m.
 
 | Detector | Recall | Precision | False positives / frame | Centre error | Class accuracy |
 |---|---|---|---|---|---|
 | Clustering | 0.85 | 0.27 | 2.45 | 0.24 m | 0.84 |
-| PointPillars v1, score >= 0.3 | 0.96 | 0.55 | 0.82 | 0.05 m | 0.98 |
-| PointPillars v1, score >= 0.5 | 0.86 | 0.70 | 0.39 | 0.04 m | 0.99 |
-| PointPillars v2, score >= 0.3 | 0.94 | 0.75 | 0.32 | 0.04 m | 0.99 |
-| PointPillars v2, score >= 0.5 | 0.81 | 0.95 | 0.04 | 0.03 m | 1.00 |
+| PointPillars, score >= 0.3 | 0.94 | 0.75 | 0.32 | 0.04 m | 0.99 |
+| PointPillars, score >= 0.5 | 0.81 | 0.95 | 0.04 | 0.03 m | 1.00 |
 
-Both models were trained from scratch for 40 epochs (about 45 minutes on one L40S)
-and run in about 4 ms per scan on that GPU. v1 was trained on 7,175 frames from 17
-generated warehouses with shelves and pallets only. Most of its false positives were
-the two pillars in the test warehouse, detected as pedestrians (350 of 449 at score
-0.5), and shelf ends. v2 adds 2 to 5 square or round posts to every generated world
-(7,410 training frames); its false positives at score 0.5 dropped to 48, of which
-4 are on the pillars.
+The model was trained from scratch on 7,410 frames from 17 generated warehouses for
+40 epochs, which took about 45 minutes on one L40S. It runs in about 4 ms per scan on
+that GPU. Each generated warehouse has 2 to 5 posts besides the shelves and pallets;
+without them the model detected the pillars in the test warehouse as pedestrians.
+Most of the remaining false positives are shelf ends detected as vehicles.
 
 Reproduce the numbers with:
 
@@ -183,17 +180,16 @@ their paths:
 | Detector | Recall | Precision | Track error | Detection time | Phantom critical warnings | Distance driven |
 |---|---|---|---|---|---|---|
 | Clustering | 0.79 | 0.28 | 0.44 m | 10 ms | 1267 | 2.4 m |
-| PointPillars v1 | 0.94 | 0.67 | 0.14 m | 6 ms | 1230 | 3.2 m |
-| PointPillars v2 | 0.91 | 0.82 | 0.13 m | 6 ms | 0 | 37.2 m |
+| PointPillars | 0.91 | 0.82 | 0.13 m | 6 ms | 0 | 37.2 m |
 
 A phantom warning is a critical warning on a track with no real object near it.
-With clustering and v1 these kept the robot in emergency stop for most of the run;
-with v2 the stops were all for real objects or the protective field. The robot did
+With clustering these kept the robot in emergency stop for most of the run. With
+PointPillars the stops were all for real objects or the protective field. The robot did
 not drive into anything in any of the runs.
 
-The monitor also holds the robot stopped while no tracks are arriving (more than
-`tracks_timeout`, 0.5 s), which covers the detector loading its model at startup or
-crashing.
+The monitor also holds the robot stopped when no tracks have arrived for longer than
+`tracks_timeout`, 0.5 s by default. This covers the detector loading its model at
+startup or crashing.
 
 ## Evaluation
 
