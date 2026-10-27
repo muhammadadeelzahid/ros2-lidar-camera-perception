@@ -4,15 +4,17 @@
   <gazebo reference="base_link"><material>Gazebo/Blue</material></gazebo>
   <gazebo reference="left_wheel"><material>Gazebo/Black</material></gazebo>
   <gazebo reference="right_wheel"><material>Gazebo/Black</material></gazebo>
+  <!-- Low but non-zero caster friction: with none at all the robot yaws freely
+       and rolls off a side slope. -->
   <gazebo reference="caster">
     <material>Gazebo/Black</material>
-    <mu1>0.0</mu1>
-    <mu2>0.0</mu2>
+    <mu1>0.1</mu1>
+    <mu2>0.1</mu2>
   </gazebo>
   <gazebo reference="rear_caster">
     <material>Gazebo/Black</material>
-    <mu1>0.0</mu1>
-    <mu2>0.0</mu2>
+    <mu1>0.1</mu1>
+    <mu2>0.1</mu2>
   </gazebo>
   <gazebo reference="camera_link"><material>Gazebo/Red</material></gazebo>
   <gazebo reference="lidar3d_link"><material>Gazebo/Black</material></gazebo>
@@ -94,6 +96,43 @@
       <joint_name>left_wheel_joint</joint_name>
       <joint_name>right_wheel_joint</joint_name>
     </plugin>
+  </gazebo>
+
+  <!-- IMU publishing /imu at 100 Hz in imu_link, physically on the tilted imu_mount.
+       linear_acceleration includes gravity (reads +9.8 on z at rest). -->
+  <xacro:macro name="imu_noise" params="stddev bias">
+    <noise type="gaussian">
+      <mean>0.0</mean>
+      <stddev>${stddev}</stddev>
+      <bias_mean>${bias}</bias_mean>
+      <bias_stddev>${bias / 4.0}</bias_stddev>
+    </noise>
+  </xacro:macro>
+  <gazebo reference="imu_mount">
+    <sensor type="imu" name="imu">
+      <always_on>true</always_on>
+      <update_rate>100.0</update_rate>
+      <imu>
+        <angular_velocity>
+          <x><xacro:imu_noise stddev="0.002" bias="0.0005"/></x>
+          <y><xacro:imu_noise stddev="0.002" bias="0.0005"/></y>
+          <z><xacro:imu_noise stddev="0.002" bias="0.0005"/></z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x><xacro:imu_noise stddev="0.05" bias="0.02"/></x>
+          <y><xacro:imu_noise stddev="0.05" bias="0.02"/></y>
+          <z><xacro:imu_noise stddev="0.05" bias="0.02"/></z>
+        </linear_acceleration>
+      </imu>
+      <plugin name="imu_plugin" filename="libgazebo_ros_imu_sensor.so">
+        <ros>
+          <namespace>/</namespace>
+          <remapping>~/out:=imu</remapping>
+        </ros>
+        <frame_name>imu_link</frame_name>
+        <initial_orientation_as_reference>false</initial_orientation_as_reference>
+      </plugin>
+    </sensor>
   </gazebo>
 
   <!-- Forward-facing camera publishing in the optical frame. -->

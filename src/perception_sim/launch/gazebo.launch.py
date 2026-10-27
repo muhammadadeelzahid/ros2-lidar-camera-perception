@@ -28,7 +28,10 @@ def generate_launch_description():
 
     xacro_file = os.path.join(sim_share, 'urdf', 'robot.urdf.xacro')
     robot_description = ParameterValue(
-        Command(['xacro ', xacro_file]), value_type=str)
+        Command(['xacro ', xacro_file,
+                 ' payload_height:=', LaunchConfiguration('payload_height'),
+                 ' payload_mass:=', LaunchConfiguration('payload_mass')]),
+        value_type=str)
 
     model_path = os.path.join(sim_share, 'models')
     existing = os.environ.get('GAZEBO_MODEL_PATH', '')
@@ -63,7 +66,8 @@ def generate_launch_description():
         arguments=[
             '-topic', 'robot_description',
             '-entity', 'ego_bot',
-            '-x', x, '-y', y, '-z', z, '-Y', yaw,
+            '-x', x, '-y', y, '-z', z,
+            '-R', LaunchConfiguration('roll'), '-P', LaunchConfiguration('pitch'), '-Y', yaw,
         ],
     )
 
@@ -79,7 +83,12 @@ def generate_launch_description():
         DeclareLaunchArgument('x', default_value='-8.0'),
         DeclareLaunchArgument('y', default_value='0.0'),
         DeclareLaunchArgument('z', default_value='0.1'),
+        DeclareLaunchArgument('roll', default_value='0.0'),
+        DeclareLaunchArgument('pitch', default_value='0.0'),
         DeclareLaunchArgument('yaw', default_value='0.0'),
+        DeclareLaunchArgument('payload_height', default_value='0.0',
+                              description='height of an extra mass above the ground, 0 for none'),
+        DeclareLaunchArgument('payload_mass', default_value='6.0'),
         set_model_path,
         gazebo,
         robot_state_publisher,

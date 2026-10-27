@@ -45,7 +45,12 @@ def generate_launch_description():
             'gui': LaunchConfiguration('gui'),
             'x': LaunchConfiguration('x'),
             'y': LaunchConfiguration('y'),
+            'z': LaunchConfiguration('z'),
+            'roll': LaunchConfiguration('roll'),
+            'pitch': LaunchConfiguration('pitch'),
             'yaw': LaunchConfiguration('yaw'),
+            'payload_height': LaunchConfiguration('payload_height'),
+            'payload_mass': LaunchConfiguration('payload_mass'),
         }.items(),
     )
 
@@ -55,6 +60,7 @@ def generate_launch_description():
         launch_arguments={
             'use_sim_time': 'true',
             'detector_config': LaunchConfiguration('detector_config'),
+            'params_file': LaunchConfiguration('params_file'),
         }.items(),
     )
 
@@ -79,7 +85,17 @@ def generate_launch_description():
         DeclareLaunchArgument('rviz', default_value='true'),
         DeclareLaunchArgument('x', default_value='-8.0'),
         DeclareLaunchArgument('y', default_value='0.0'),
+        DeclareLaunchArgument('z', default_value='0.1'),
+        DeclareLaunchArgument('roll', default_value='0.0'),
+        DeclareLaunchArgument('pitch', default_value='0.0'),
         DeclareLaunchArgument('yaw', default_value='0.0'),
+        DeclareLaunchArgument('payload_height', default_value='0.0',
+                              description='height of an extra mass above the ground, 0 for none'),
+        DeclareLaunchArgument('payload_mass', default_value='6.0'),
+        DeclareLaunchArgument(
+            'params_file',
+            default_value=PathJoinSubstitution(
+                [FindPackageShare('perception_bringup'), 'config', 'perception.yaml'])),
         gazebo,
         OpaqueFunction(function=agent_mover),
         perception,

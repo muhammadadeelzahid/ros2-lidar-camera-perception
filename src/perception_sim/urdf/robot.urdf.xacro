@@ -13,6 +13,13 @@
 
   <xacro:property name="camera_size" value="0.03"/>
 
+  <!-- Optional mass on a mast above the LiDAR, like a forklift with its load raised.
+       payload_height is measured from the ground; 0 leaves the robot as it is. -->
+  <xacro:arg name="payload_height" default="0.0"/>
+  <xacro:arg name="payload_mass" default="6.0"/>
+  <xacro:property name="payload_height" value="$(arg payload_height)"/>
+  <xacro:property name="payload_mass" value="$(arg payload_mass)"/>
+
   <xacro:macro name="box_inertia" params="m x y z">
     <inertial>
       <mass value="${m}"/>
@@ -85,7 +92,7 @@
       </visual>
       <collision>
         <geometry><sphere radius="${wheel_radius/2.0}"/></geometry>
-        <surface><friction><ode><mu>0.0</mu><mu2>0.0</mu2></ode></friction></surface>
+        <surface><friction><ode><mu>0.1</mu><mu2>0.1</mu2></ode></friction></surface>
       </collision>
       <inertial>
         <mass value="0.2"/>
@@ -147,6 +154,56 @@
     <child link="lidar3d_link"/>
     <origin xyz="0 0 ${base_height/2.0 + 0.12}" rpy="0 0 0"/>
   </joint>
+
+  <!-- IMU at the centre of the chassis. imu_link is where the sensor is meant to be;
+       imu_mount is where it actually sits in simulation, about 1 degree off level, so
+       there is a mounting error for calibrate_imu to find. -->
+  <link name="imu_link"/>
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+  <link name="imu_mount"/>
+  <joint name="imu_mount_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_mount"/>
+    <origin xyz="0 0 0" rpy="0.0175 -0.0105 0"/>
+  </joint>
+
+  <xacro:if value="${payload_height > 0}">
+    <!-- Visual and mass only: no collision, so the LiDAR does not see the mast. -->
+    <xacro:property name="mast_bottom" value="${base_height/2.0 + 0.155}"/>
+    <xacro:property name="mast_top" value="${payload_height - wheel_radius - base_height/2.0 - 0.1}"/>
+    <link name="mast">
+      <visual>
+        <origin xyz="0 0 ${(mast_top - mast_bottom)/2.0}" rpy="0 0 0"/>
+        <geometry><cylinder radius="0.015" length="${mast_top - mast_bottom}"/></geometry>
+        <material name="mast"><color rgba="0.6 0.6 0.6 1.0"/></material>
+      </visual>
+      <inertial>
+        <mass value="0.1"/>
+        <inertia ixx="1e-4" ixy="0" ixz="0" iyy="1e-4" iyz="0" izz="1e-5"/>
+      </inertial>
+    </link>
+    <joint name="mast_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="mast"/>
+      <origin xyz="0 0 ${mast_bottom}" rpy="0 0 0"/>
+    </joint>
+    <link name="payload">
+      <visual>
+        <geometry><box size="0.2 0.2 0.2"/></geometry>
+        <material name="payload"><color rgba="0.9 0.6 0.1 1.0"/></material>
+      </visual>
+      <xacro:box_inertia m="${payload_mass}" x="0.2" y="0.2" z="0.2"/>
+    </link>
+    <joint name="payload_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="payload"/>
+      <origin xyz="0 0 ${payload_height - wheel_radius - base_height/2.0}" rpy="0 0 0"/>
+    </joint>
+  </xacro:if>
 
   <xacro:include filename="$(find perception_sim)/urdf/robot.gazebo.xacro"/>
 
