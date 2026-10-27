@@ -28,6 +28,7 @@ setup(
             'lidar_camera_overlay = perception_tools.lidar_camera_overlay:main',
             'wander = perception_tools.wander:main',
             'agent_mover = perception_tools.agent_mover:main',
+            'eval_detector = perception_tools.eval_detector:main',
         ],
     },
 )
