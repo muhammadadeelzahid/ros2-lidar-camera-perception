@@ -30,6 +30,7 @@
     info_dist: 3.0
     crit_ttc: 1.0
     warn_ttc: 3.0
+    tracks_timeout: 0.5          # s without /tracks before the robot is held stopped
     # Protective field on the raw point cloud, independent of detection.
     use_protective_field: true
     base_frame: base_footprint   # base_link on most real robots

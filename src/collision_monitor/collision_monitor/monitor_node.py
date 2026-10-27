@@ -78,6 +78,8 @@ class MonitorNode(Node):
         self.field_min_z = self.declare_parameter('field_min_z', 0.1).value
         self.field_max_z = self.declare_parameter('field_max_z', 2.0).value
         self.field_min_points = self.declare_parameter('field_min_points', 3).value
+        # Stop when tracks stop arriving, e.g. the detector is still loading or died.
+        self.tracks_timeout = self.declare_parameter('tracks_timeout', 0.5).value
 
         # Ego state (x, y, yaw, vx, vy) in the tracking frame. Without odometry the
         # tracks are already vehicle-relative, so the ego sits at the origin.
@@ -90,6 +92,7 @@ class MonitorNode(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.cloud_tf = {}
         self.last_reverse = None
+        self.last_tracks = None
 
         self.create_subscription(Odometry, '/odom', self.on_odom, 10)
         self.create_subscription(TrackedObjectArray, '/tracks', self.on_tracks, 10)
@@ -108,7 +111,14 @@ class MonitorNode(Node):
 
     @property
     def estop(self):
-        return self.track_critical or self.field_blocked
+        return self.track_critical or self.field_blocked or self.tracks_stale
+
+    @property
+    def tracks_stale(self):
+        if self.last_tracks is None:
+            return True
+        age = (self.get_clock().now() - self.last_tracks).nanoseconds * 1e-9
+        return age > self.tracks_timeout
 
     def on_odom(self, msg):
         self.forward_speed = msg.twist.twist.linear.x
@@ -126,7 +136,7 @@ class MonitorNode(Node):
             self.cmd_pub.publish(msg)
             return
         # A field stop still allows backing away; the field then checks behind.
-        if not self.track_critical and msg.linear.x < 0.0:
+        if not (self.track_critical or self.tracks_stale) and msg.linear.x < 0.0:
             self.last_reverse = self.get_clock().now()
             self.cmd_pub.publish(msg)
         else:
@@ -135,7 +145,10 @@ class MonitorNode(Node):
     def on_brake_timer(self):
         if not (self.estop and self.enable_estop):
             return
-        if self.last_reverse is not None and not self.track_critical:
+        if self.tracks_stale:
+            self.get_logger().warn('no recent tracks, holding stop',
+                                   throttle_duration_sec=2.0)
+        elif self.last_reverse is not None and not self.track_critical:
             if (self.get_clock().now() - self.last_reverse).nanoseconds < 3e8:
                 return
         self.cmd_pub.publish(Twist())
@@ -171,6 +184,7 @@ class MonitorNode(Node):
                 throttle_duration_sec=1.0)
 
     def on_tracks(self, msg):
+        self.last_tracks = self.get_clock().now()
         if self.ego is None:
             return
         ex, ey, eyaw, evx, evy = self.ego
