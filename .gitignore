@@ -1,0 +1,28 @@
+# Colcon / ament
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+
+# Editor / OS
+.vscode/
+*.swp
+.DS_Store
+
+# Recordings
+*.bag
+rosbag2_*/
+
+# Generated data, weights and results
+/dataset/
+/pcdet_dataset/
+/worlds/
+/analysis_output/
+*.pth
+*.pt
