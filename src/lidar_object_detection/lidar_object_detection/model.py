@@ -94,21 +94,16 @@ class DetectorModel:
 
     @staticmethod
     def _euclidean_cluster(pts, eps, cKDTree):
+        """Label points by connected components of the eps-neighbour graph."""
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import connected_components
+
         n = pts.shape[0]
-        tree = cKDTree(pts)
-        parent = np.arange(n)
-
-        def find(a):
-            while parent[a] != a:
-                parent[a] = parent[parent[a]]
-                a = parent[a]
-            return a
-
-        for a, b in tree.query_pairs(eps):
-            ra, rb = find(a), find(b)
-            if ra != rb:
-                parent[ra] = rb
-        return np.array([find(i) for i in range(n)])
+        pairs = cKDTree(pts).query_pairs(eps, output_type='ndarray')
+        graph = coo_matrix((np.ones(len(pairs), dtype=np.int8),
+                            (pairs[:, 0], pairs[:, 1])), shape=(n, n))
+        _, labels = connected_components(graph, directed=False)
+        return labels
 
     def _box_from_cluster(self, cluster, score):
         lo = cluster.min(axis=0)
