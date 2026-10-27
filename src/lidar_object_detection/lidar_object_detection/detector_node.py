@@ -7,6 +7,7 @@ in the LiDAR frame.
 
 import math
 import os
+import time
 
 import numpy as np
 import yaml
@@ -56,6 +57,7 @@ class DetectorNode(Node):
         # Depth 1: always work on the newest scan rather than a backlog.
         self.create_subscription(PointCloud2, '/points', self.on_cloud, 1)
         self.get_logger().info(f'detector ready (backend: {self.model.backend})')
+        self.timings = []  # seconds per scan, reported every 100 scans
 
     def on_cloud(self, msg):
         pts = cloud_to_xyz(msg)
@@ -63,7 +65,15 @@ class DetectorNode(Node):
             return
         cloud = np.hstack([pts, np.zeros((pts.shape[0], 1), dtype=np.float32)])
 
+        t0 = time.perf_counter()
         boxes = self.model.detect(cloud)
+        self.timings.append(time.perf_counter() - t0)
+        if len(self.timings) == 100:
+            t = np.array(self.timings) * 1000.0
+            self.get_logger().info(
+                f'detection time over 100 scans: mean {t.mean():.1f} ms, '
+                f'p95 {np.percentile(t, 95):.1f} ms, max {t.max():.1f} ms')
+            self.timings = []
         out = Detection3DArray()
         out.header = msg.header
         if self.frame:
