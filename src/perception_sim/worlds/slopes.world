@@ -3,9 +3,9 @@
      strip of 2 cm bumps. The pads are tilted about x and raised clear of the ground, so a
      robot placed on a pad facing +x is driving across the slope with its left side up.
      Pad top centres (place the robot there with the pad's roll):
-       slope_04  x 10  y 0  z 0.449  roll 0.0698
-       slope_08  x 20  y 0  z 0.585  roll 0.1396
-       slope_12  x 30  y 0  z 0.719  roll 0.2094 -->
+       slope_04  x 15  y 0  z 0.588  roll 0.0698
+       slope_08  x 30  y 0  z 0.864  roll 0.1396
+       slope_12  x 45  y 0  z 1.135  roll 0.2094 -->
 <sdf version="1.6">
   <world name="slopes">
     <include><uri>model://sun</uri></include>
@@ -23,14 +23,14 @@
 
     <model name="slope_04">
       <static>true</static>
-      <pose>10 0 0.2992 0.0698 0 0</pose>
+      <pose>15 0 0.4387 0.0698 0 0</pose>
       <link name="link">
         <collision name="c">
-          <geometry><box><size>8 4 0.3</size></box></geometry>
+          <geometry><box><size>12 8 0.3</size></box></geometry>
           <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface>
         </collision>
         <visual name="v">
-          <geometry><box><size>8 4 0.3</size></box></geometry>
+          <geometry><box><size>12 8 0.3</size></box></geometry>
           <material><ambient>0.55 0.6 0.5 1</ambient><diffuse>0.6 0.65 0.55 1</diffuse></material>
         </visual>
       </link>
@@ -38,14 +38,14 @@
 
     <model name="slope_08">
       <static>true</static>
-      <pose>20 0 0.4369 0.1396 0 0</pose>
+      <pose>30 0 0.7152 0.1396 0 0</pose>
       <link name="link">
         <collision name="c">
-          <geometry><box><size>8 4 0.3</size></box></geometry>
+          <geometry><box><size>12 8 0.3</size></box></geometry>
           <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface>
         </collision>
         <visual name="v">
-          <geometry><box><size>8 4 0.3</size></box></geometry>
+          <geometry><box><size>12 8 0.3</size></box></geometry>
           <material><ambient>0.6 0.55 0.4 1</ambient><diffuse>0.65 0.6 0.45 1</diffuse></material>
         </visual>
       </link>
@@ -53,14 +53,14 @@
 
     <model name="slope_12">
       <static>true</static>
-      <pose>30 0 0.5725 0.2094 0 0</pose>
+      <pose>45 0 0.9884 0.2094 0 0</pose>
       <link name="link">
         <collision name="c">
-          <geometry><box><size>8 4 0.3</size></box></geometry>
+          <geometry><box><size>12 8 0.3</size></box></geometry>
           <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface>
         </collision>
         <visual name="v">
-          <geometry><box><size>8 4 0.3</size></box></geometry>
+          <geometry><box><size>12 8 0.3</size></box></geometry>
           <material><ambient>0.65 0.45 0.35 1</ambient><diffuse>0.7 0.5 0.4 1</diffuse></material>
         </visual>
       </link>

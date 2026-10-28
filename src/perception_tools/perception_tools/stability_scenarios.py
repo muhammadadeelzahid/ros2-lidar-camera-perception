@@ -37,9 +37,9 @@ from perception_tools.geometry import quat_to_matrix, wrap_angle
 # Pad tops in slopes.world: name -> (x, y, z, roll).
 PADS = {
     'flat': (0.0, 0.0, 0.0, 0.0),
-    'slope_04': (10.0, 0.0, 0.449, 0.0698),
-    'slope_08': (20.0, 0.0, 0.585, 0.1396),
-    'slope_12': (30.0, 0.0, 0.719, 0.2094),
+    'slope_04': (15.0, 0.0, 0.588, 0.0698),
+    'slope_08': (30.0, 0.0, 0.864, 0.1396),
+    'slope_12': (45.0, 0.0, 1.135, 0.2094),
     'bumps': (-13.0, 0.0, 0.0, 0.0),
 }
 
@@ -54,6 +54,7 @@ SCENARIOS = [
     ('bumps', 'bumps', 0.8, 0.0, 5.0),
 ]
 
+PAD_HALF = (5.7, 3.7)  # usable half length and width of a slope pad, m
 RAMP_S = 1.5
 SETTLE_S = 3.0
 STOP_S = 1.5
@@ -162,6 +163,8 @@ class ScenarioRunner(Node):
                 'cmd_v': cmd.linear.x, 'cmd_w': cmd.angular.z,
                 'v': self.speed[0], 'w': self.speed[1],
                 'x': p.x, 'y': p.y, 'lift_m': float(wheel_h.max()),
+                'off_pad': int(pad.startswith('slope') and (
+                    abs(p.x - surface[0]) > PAD_HALF[0] or abs(p.y - surface[1]) > PAD_HALF[1])),
                 'tilt_deg': tilt, 'true_roll': true_roll, 'true_pitch': true_pitch,
                 'roll': st.roll, 'pitch': st.pitch,
                 'margin_deg': math.degrees(st.margin),
@@ -172,17 +175,22 @@ class ScenarioRunner(Node):
         return samples
 
     def summarize(self, name, gate, rep, samples):
-        lift = next((s['t'] for s in samples if s['lift_m'] > self.lift_height), None)
+        off = next((s['t'] for s in samples if s['off_pad']), None)
+        lift = next((s['t'] for s in samples if s['lift_m'] > self.lift_height
+                     and (off is None or s['t'] < off)), None)
         crit = next((s['t'] for s in samples if s['level'] >= 3), None)
         warn = next((s['t'] for s in samples if s['level'] >= 2), None)
-        upright = [s for s in samples if lift is None or s['t'] < lift]
+        end = min(t for t in (lift, off, math.inf) if t is not None)
+        upright = [s for s in samples if s['t'] < end]
         roll_err = [math.degrees(abs(wrap_angle(s['roll'] - s['true_roll']))) for s in upright]
         pitch_err = [math.degrees(abs(s['pitch'] - s['true_pitch'])) for s in upright]
         return {
             'scenario': name, 'gate': 'on' if gate else 'off', 'run': rep,
             'tipped': lift is not None,
+            'left_pad': off is not None and lift is None,
             'max_tilt_deg': round(max(s['tilt_deg'] for s in samples), 1),
-            'max_lift_cm': round(100 * max(s['lift_m'] for s in samples), 1),
+            'max_lift_cm': round(100 * max(
+                s['lift_m'] for s in samples if off is None or s['t'] < off), 1),
             'max_v': round(max(abs(s['v']) for s in samples), 2),
             'max_w': round(max(abs(s['w']) for s in samples), 2),
             'first_warn_s': warn, 'first_critical_s': crit, 'lift_s': lift,
@@ -234,11 +242,14 @@ def print_summary(rows):
             keys.append((r['scenario'], r['gate']))
     for name, gate in keys:
         group = [r for r in rows if r['scenario'] == name and r['gate'] == gate]
+        left = sum(r['left_pad'] for r in group)
+        group = [r for r in group if not r['left_pad']]
         leads = [r['lead_s'] for r in group if r['lead_s'] is not None]
         errs = [r['attitude_err_deg'] for r in group if r['attitude_err_deg'] is not None]
         print(' | '.join([
             name, gate,
-            '{}/{}'.format(sum(r['tipped'] for r in group), len(group)),
+            '{}/{}'.format(sum(r['tipped'] for r in group), len(group))
+            + (' ({} left the pad)'.format(left) if left else ''),
             ' '.join(str(r['max_lift_cm']) for r in group),
             '{:.1f}'.format(min(leads)) if leads else '-',
             '{:.0%}'.format(np.mean([r['critical_fraction'] for r in group])),
