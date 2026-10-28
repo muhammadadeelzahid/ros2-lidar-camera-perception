@@ -26,6 +26,7 @@ setup(
             'generate_world = perception_tools.generate_world:main',
             'calibrate_camera = perception_tools.calibrate_camera:main',
             'calibrate_imu = perception_tools.calibrate_imu:main',
+            'stability_scenarios = perception_tools.stability_scenarios:main',
             'lidar_camera_overlay = perception_tools.lidar_camera_overlay:main',
             'wander = perception_tools.wander:main',
             'agent_mover = perception_tools.agent_mover:main',
