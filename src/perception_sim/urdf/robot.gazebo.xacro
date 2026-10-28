@@ -84,11 +84,14 @@
     </sensor>
   </gazebo>
 
-  <!-- Differential drive: publishes /odom and the odom -> base_footprint TF. -->
+  <!-- Differential drive: publishes /odom and the odom -> base_footprint TF. Commands
+       arrive on drive/cmd_vel from drive_watchdog, which stops the wheels when the
+       collision monitor goes quiet. -->
   <gazebo>
     <plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
       <ros>
         <namespace>/</namespace>
+        <remapping>cmd_vel:=drive/cmd_vel</remapping>
       </ros>
       <xacro:if value="${wheels == 2}">
         <left_joint>left_wheel_joint</left_joint>
@@ -109,11 +112,9 @@
       </xacro:if>
       <max_wheel_torque>20.0</max_wheel_torque>
       <max_wheel_acceleration>1.0</max_wheel_acceleration>
-      <command_topic>cmd_vel</command_topic>
       <publish_odom>true</publish_odom>
       <publish_odom_tf>true</publish_odom_tf>
       <publish_wheel_tf>false</publish_wheel_tf>
-      <odometry_topic>odom</odometry_topic>
       <odometry_frame>odom</odometry_frame>
       <robot_base_frame>base_footprint</robot_base_frame>
       <update_rate>50.0</update_rate>

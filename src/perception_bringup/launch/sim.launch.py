@@ -62,9 +62,19 @@ def generate_launch_description():
             'use_sim_time': 'true',
             'detector_config': LaunchConfiguration('detector_config'),
             'params_file': LaunchConfiguration('params_file'),
+            'points_topic': LaunchConfiguration('points_topic'),
+            'image_topic': LaunchConfiguration('image_topic'),
+            'odom_topic': LaunchConfiguration('odom_topic'),
+            'imu_topic': LaunchConfiguration('imu_topic'),
             'imu_calibration': LaunchConfiguration('imu_calibration'),
         }.items(),
     )
+
+    # The simulated drive holds its last command, so this watchdog stops it when the
+    # collision monitor or its commands go quiet, as a vehicle's drive controller would.
+    watchdog = Node(
+        package='collision_monitor', executable='drive_watchdog', name='drive_watchdog',
+        output='screen', parameters=[{'use_sim_time': True}])
 
     rviz = Node(
         package='rviz2', executable='rviz2', name='rviz2',
@@ -83,6 +93,10 @@ def generate_launch_description():
             'detector_config',
             default_value=PathJoinSubstitution(
                 [FindPackageShare('lidar_object_detection'), 'config', 'pointpillars.yaml'])),
+        DeclareLaunchArgument('points_topic', default_value='/points'),
+        DeclareLaunchArgument('image_topic', default_value='/camera/image_raw'),
+        DeclareLaunchArgument('odom_topic', default_value='/odom'),
+        DeclareLaunchArgument('imu_topic', default_value='/imu'),
         DeclareLaunchArgument('gui', default_value='true'),
         DeclareLaunchArgument('rviz', default_value='true'),
         DeclareLaunchArgument('x', default_value='-8.0'),
@@ -107,5 +121,6 @@ def generate_launch_description():
         gazebo,
         OpaqueFunction(function=agent_mover),
         perception,
+        watchdog,
         rviz,
     ])
