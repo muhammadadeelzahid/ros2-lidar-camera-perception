@@ -29,6 +29,7 @@ frames automatically for training and evaluating the detector.
 /camera/image_raw   -> camera_detector    -> /detections/camera
 /detections/*       -> fusion_tracker     -> /tracks
 /tracks, /odom      -> collision_monitor  -> /collision_warnings
+/imu, /odom         -> collision_monitor  -> /stability
 cmd_vel_in          -> collision_monitor  -> cmd_vel
 ```
 
@@ -39,6 +40,16 @@ The collision monitor also checks a protective field on the raw point cloud: if
 points fall inside a box ahead of the vehicle, whose length grows with speed, it
 stops even when nothing was detected. Reverse commands are still allowed so the
 vehicle can back away.
+
+With an IMU the monitor also watches for tip-over. A complementary filter estimates
+roll and pitch, using odometry to remove the vehicle's own acceleration. The margin
+is the force-angle measure: for each edge of the polygon formed by the wheel contacts,
+the angle between the net force at the centre of gravity and the line from the
+centre of gravity to that edge. Before a command is passed on, the monitor predicts
+the margin it would produce, adding the turn's lateral acceleration v * w to gravity
+at the current slope, and scales speed and turn rate down until the margin stays
+above `stability_min_margin_deg`. Slowing is rate limited so the stop itself does
+not tip the vehicle. If `/tracks` or `/imu` stop arriving, the robot is held stopped.
 
 ## Build
 
@@ -97,6 +108,13 @@ set `tracking_frame` to the base frame and `use_odom: false` in
 `perception_bringup/config/perception.yaml`. Set `base_frame`, `ego_length` and
 `ego_width` there to match the vehicle so the protective field covers its footprint.
 
+For tip-over monitoring set `support_points` to the wheel contact points and `cg` to
+the centre of gravity, both relative to a base frame on the ground. Raise the `cg`
+height when the vehicle carries a load high up. Set the IMU mount in
+`robot_sensors.yaml` and calibrate it as below. On a vehicle without an IMU, launch
+with `use_imu:=false`; otherwise the monitor holds it stopped while waiting for
+`/imu`.
+
 ## Calibration
 
 Camera intrinsics from checkerboard images:
@@ -113,6 +131,13 @@ the projected points line up with object edges in the image.
 
 ```bash
 ros2 run perception_tools lidar_camera_overlay
+```
+
+IMU mounting: with the vehicle standing still on level ground, record the sensor's
+tilt and gyro bias, then pass the file at launch with `imu_calibration:=...`.
+
+```bash
+ros2 run perception_tools calibrate_imu --ros-args -p output:=imu_calibration.yaml
 ```
 
 ## Detector training
@@ -190,6 +215,42 @@ not drive into anything in any of the runs.
 The monitor also holds the robot stopped when no tracks have arrived for longer than
 `tracks_timeout`, 0.5 s by default. This covers the detector loading its model at
 startup or crashing.
+
+## Tip-over test
+
+`slopes.world` has side-slope pads at 4, 8 and 12 degrees and a strip of 2 cm bumps.
+The test vehicle is the robot with four driven wheels, `wheels:=4`, and a 6 kg mass at
+0.9 m, `payload_height:=0.9`. That puts the centre of gravity at about 0.47 m, so it
+tips at about 20 degrees sideways. The script drives each scenario three times with
+the stability gate off and three times with it on:
+
+```bash
+./scripts/stability_scenarios.sh stability_results
+```
+
+A run counts as a tip-over when a wheel is more than 10 cm off the surface, from the
+Gazebo ground truth. Bouncing and skid-steer chatter lift a wheel up to about 5 cm.
+
+| Scenario | Tipped, gate off | Tipped, gate on | Worst wheel lift, off | Worst wheel lift, on |
+|---|---|---|---|---|
+| Flat, turn at 1.0 m/s and 2.5 rad/s | 0/3 | 0/3 | 3 cm | 5 cm |
+| 4 degree slope, turn at 1.0 m/s and 2.0 rad/s | 0/3 | 0/3 | 2 cm | 3 cm |
+| 8 degree slope, turn at 1.2 m/s and 2.4 rad/s | 3/3 | 0/3 | 44 cm | 4 cm |
+| 12 degree slope, straight across at 0.6 m/s | 0/3 | 0/3 | 1 cm | 1 cm |
+| 12 degree slope, turn at 0.8 m/s and 2.0 rad/s | 3/3 | 0/3 | 45 cm | 1 cm |
+| Bumps 0.6 m apart, straight at 0.8 m/s | 1/3 | 0/3 | 42 cm | 10 cm |
+
+Turns on the slopes go towards the uphill side, which puts the outside of the turn
+downhill. With the gate off, the first critical warning came at least 2.3 s before a
+wheel lifted. The bumps were meant as a false-alarm check, but hitting them at about
+1.3 Hz builds up pitching in the tall vehicle and it went over once; with the gate on
+it slowed down and stayed up, though one run came close.
+
+Roll and pitch estimates were within about 1 to 2 degrees RMS of the ground truth while
+driving and 0.3 degrees standing on the 12 degree slope. `calibrate_imu` measured the
+simulated IMU's mounting error as 1.07 and -0.51 degrees; the set values are 1.0 and
+-0.6. The protective field assumes a flat floor and is turned off for this test,
+because a slope ahead looks like an obstacle to it.
 
 ## Evaluation
 
