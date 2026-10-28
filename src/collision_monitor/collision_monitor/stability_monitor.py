@@ -23,11 +23,11 @@ from collision_monitor.stability import (
 class StabilityMonitor:
 
     def __init__(self, support_points, cg, info, warn, crit, min_margin,
-                 time_constant=1.0, accel_gate=2.0, lowpass_hz=5.0, response_time=0.5,
-                 max_accel=1.0, max_decel=0.5):
+                 time_constant=1.0, accel_gate=2.0, lowpass_hz=2.0, response_time=0.5,
+                 max_accel=1.0):
         # Angles in radians. min_margin: smallest predicted margin a command may have.
-        # A speed change is expected to take response_time, at no more than max_accel
-        # (what the drive can do) or max_decel (what the gate allows when slowing).
+        # A speed change is expected to take response_time, at no more than max_accel,
+        # what the drive can do when speeding up or braking.
         self.polygon = order_polygon(support_points)
         self.cg = np.asarray(cg, dtype=float)
         self.half_track = float(np.max(np.abs(self.polygon[:, 1])))
@@ -35,7 +35,6 @@ class StabilityMonitor:
         self.min_margin = min_margin
         self.response_time = response_time
         self.max_accel = max_accel
-        self.max_decel = max_decel
         self.filter = ComplementaryFilter(time_constant, accel_gate)
         self.lowpass = LowPass(lowpass_hz)
         self.mount = np.eye(3)
@@ -67,11 +66,8 @@ class StabilityMonitor:
             self.force[1], self.force[2], self.cg[2], self.half_track)
 
     def predicted_margin(self, v, omega, speed=0.0):
-        accel_x = (v - speed) / self.response_time
-        if abs(v) < abs(speed):
-            accel_x = math.copysign(min(abs(accel_x), self.max_decel), accel_x)
-        else:
-            accel_x = math.copysign(min(abs(accel_x), self.max_accel), accel_x)
+        accel_x = float(np.clip((v - speed) / self.response_time,
+                                -self.max_accel, self.max_accel))
         f = predicted_specific_force(self.roll, self.pitch, v, omega, accel_x)
         return stability_margin(self.polygon, self.cg, -f)[0]
 

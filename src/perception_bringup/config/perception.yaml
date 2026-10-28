@@ -43,7 +43,7 @@
     stability_min_margin_deg: 5.0   # commands are scaled down to keep this margin
     imu_timeout: 0.2             # s without /imu before the robot is held stopped
     attitude_time_constant: 1.0  # s, gyro vs accelerometer crossover
-    accel_lowpass_hz: 5.0
+    accel_lowpass_hz: 2.0        # tipping develops over about a second; keeps vibration out
     response_time: 0.5           # s to reach a commanded speed
     max_accel: 1.0               # m/s^2 the drive can deliver
     max_decel: 0.5               # m/s^2 used when the stability limit slows the robot

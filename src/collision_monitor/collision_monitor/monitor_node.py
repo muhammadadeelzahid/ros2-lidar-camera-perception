@@ -22,6 +22,8 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.time import Time
 
+from rcl_interfaces.msg import SetParametersResult
+
 from geometry_msgs.msg import Point, Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, PointCloud2
@@ -104,10 +106,11 @@ class MonitorNode(Node):
             np.reshape(support, (-1, 2)), cg, *deg,
             time_constant=self.declare_parameter('attitude_time_constant', 1.0).value,
             accel_gate=self.declare_parameter('attitude_accel_gate', 2.0).value,
-            lowpass_hz=self.declare_parameter('accel_lowpass_hz', 5.0).value,
+            lowpass_hz=self.declare_parameter('accel_lowpass_hz', 2.0).value,
             response_time=self.declare_parameter('response_time', 0.5).value,
-            max_accel=self.declare_parameter('max_accel', 1.0).value,
-            max_decel=self.max_decel)
+            max_accel=self.declare_parameter('max_accel', 1.0).value)
+        # stability_gate can be switched at run time, e.g. for gate-off test runs.
+        self.add_on_set_parameters_callback(self._on_set_parameters)
         calib = self.declare_parameter('imu_calibration_file', '').value
         if self.use_stability and calib:
             self._load_imu_calibration(calib)
@@ -130,8 +133,10 @@ class MonitorNode(Node):
         self.speed_rate = LowPass(2.0)
         self.speed_accel = 0.0
         self.last_cmd = (0.0, 0.0)
+        self.last_cmd_msg = None
         self.last_cmd_time = None
         self.command_scale = 1.0
+        self.ramping = False
 
         self.create_subscription(Odometry, '/odom', self.on_odom, 10)
         self.create_subscription(TrackedObjectArray, '/tracks', self.on_tracks, 10)
@@ -171,6 +176,12 @@ class MonitorNode(Node):
         if self.last_imu is None:
             return True
         return (self.get_clock().now() - self.last_imu).nanoseconds * 1e-9 > self.imu_timeout
+
+    def _on_set_parameters(self, params):
+        for p in params:
+            if p.name == 'stability_gate':
+                self.stability_gate = bool(p.value)
+        return SetParametersResult(successful=True)
 
     def _load_imu_calibration(self, path):
         if not os.path.exists(path):
@@ -220,22 +231,28 @@ class MonitorNode(Node):
         """The command after the stability limit, and the scale that was applied."""
         v, w = msg.linear.x, msg.angular.z
         self.last_cmd = (v, w)
+        self.last_cmd_msg = msg
+        self.ramping = False
         if not self.stability.ready:
             return msg, 1.0
         v_lim, w_lim, k = self.stability.limit(v, w, self.forward_speed)
         if k >= 1.0 or not self.stability_gate:
             return msg, k
-        # Slow down at no more than max_decel, so the limit itself does not pitch
-        # the vehicle forward.
+        # Slow down at no more than max_decel, so the limit itself does not pitch the
+        # vehicle. While still faster than planned, cut the turn rate by the same ratio
+        # so the lateral acceleration v * w stays at the planned value.
         now = self.get_clock().now()
-        dt = 0.1 if self.last_cmd_time is None else min(
+        dt = 0.05 if self.last_cmd_time is None else min(
             0.2, (now - self.last_cmd_time).nanoseconds * 1e-9)
         speed = self.forward_speed
-        if abs(v_lim) < abs(speed):
-            v_lim = math.copysign(max(abs(v_lim), abs(speed) - self.max_decel * dt), speed)
+        v_out, w_out = v_lim, w_lim
+        if abs(v_lim) < abs(speed) - self.max_decel * dt:
+            v_out = math.copysign(abs(speed) - self.max_decel * dt, speed)
+            w_out = w_lim * v_lim / v_out
+            self.ramping = True
         out = Twist()
-        out.linear.x = float(v_lim)
-        out.angular.z = float(w_lim)
+        out.linear.x = float(v_out)
+        out.angular.z = float(w_out)
         return out, k
 
     def on_cmd_in(self, msg):
@@ -255,6 +272,13 @@ class MonitorNode(Node):
 
     def on_brake_timer(self):
         if not (self.estop and self.enable_estop):
+            # Most drives hold the last command, so a ramp-down continues here when
+            # commands stop arriving.
+            if self.ramping and self.last_cmd_msg is not None and (
+                    self.get_clock().now() - self.last_cmd_time).nanoseconds > 1e8:
+                msg, self.command_scale = self._stability_limit(self.last_cmd_msg)
+                self.last_cmd_time = self.get_clock().now()
+                self.cmd_pub.publish(msg)
             return
         if self.tracks_stale or self.imu_stale:
             self.get_logger().warn(
