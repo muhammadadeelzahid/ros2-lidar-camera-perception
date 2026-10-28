@@ -40,7 +40,8 @@ def generate_launch_description():
             'imu_calibration_file': LaunchConfiguration('imu_calibration'),
         }],
         remappings=[('/odom', LaunchConfiguration('odom_topic')),
-                    ('/imu', LaunchConfiguration('imu_topic'))])
+                    ('/imu', LaunchConfiguration('imu_topic')),
+                    ('/points', LaunchConfiguration('points_topic'))])
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='false'),

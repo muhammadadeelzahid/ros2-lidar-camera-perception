@@ -9,6 +9,11 @@ either check calls for a stop.
 
 With an IMU, the monitor also estimates how close the vehicle is to tipping over and
 scales down commands whose predicted tip-over margin is too small.
+
+Failsafes: the robot is held stopped while any input it relies on (tracks, odometry,
+IMU) is stale or the LiDAR reports its view mostly blank, and slowed down while part
+of the LiDAR view is blank. The reason is published on /diagnostics, and a heartbeat
+lets the drive stop the robot if this node itself stops running.
 """
 
 import math
@@ -24,9 +29,11 @@ from rclpy.time import Time
 
 from rcl_interfaces.msg import SetParametersResult
 
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Point, Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, PointCloud2
+from std_msgs.msg import UInt32
 from visualization_msgs.msg import Marker, MarkerArray
 
 import tf2_ros
@@ -49,6 +56,7 @@ from collision_monitor.attitude import LowPass
 from collision_monitor.stability_monitor import StabilityMonitor
 
 NO_TRACK = 2 ** 32 - 1  # track_id used for protective-field warnings
+LIDAR_HEALTH = 'lidar_detector: lidar'
 
 LEVEL_COLOR = {
     0: (0.6, 0.6, 0.6),
@@ -115,6 +123,19 @@ class MonitorNode(Node):
         if self.use_stability and calib:
             self._load_imu_calibration(calib)
 
+        # When each input last arrived. A stale input holds the robot stopped.
+        self.inputs = {
+            'tracks': {'timeout': self.tracks_timeout, 'used': True, 'last': None},
+            'odometry': {'timeout': self.declare_parameter('odom_timeout', 0.5).value,
+                         'used': self.use_odom, 'last': None},
+            'IMU': {'timeout': self.imu_timeout, 'used': self.use_stability, 'last': None},
+        }
+        # While part of the LiDAR view is blank the robot may only creep.
+        self.degraded_max_speed = self.declare_parameter('degraded_max_speed', 0.3).value
+        self.lidar_level = DiagnosticStatus.OK[0]
+        self.lidar_message = 'no report yet'
+        self.heartbeat = 0
+
         # Ego state (x, y, yaw, vx, vy) in the tracking frame. Without odometry the
         # tracks are already vehicle-relative, so the ego sits at the origin.
         self.ego = None if self.use_odom else (0.0, 0.0, 0.0, 0.0, 0.0)
@@ -126,8 +147,6 @@ class MonitorNode(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.cloud_tf = {}
         self.last_reverse = None
-        self.last_tracks = None
-        self.last_imu = None
         self.last_imu_stamp = None
         self.last_odom = None
         self.speed_rate = LowPass(2.0)
@@ -141,6 +160,7 @@ class MonitorNode(Node):
         self.create_subscription(Odometry, '/odom', self.on_odom, 10)
         self.create_subscription(TrackedObjectArray, '/tracks', self.on_tracks, 10)
         self.create_subscription(Twist, 'cmd_vel_in', self.on_cmd_in, 10)
+        self.create_subscription(DiagnosticArray, '/diagnostics', self.on_diagnostics, 20)
         if self.use_field:
             self.create_subscription(PointCloud2, '/points', self.on_cloud, 1)
         if self.use_stability:
@@ -153,29 +173,58 @@ class MonitorNode(Node):
         self.marker_pub = self.create_publisher(
             MarkerArray, '/collision_warnings/markers', 10)
         self.cmd_pub = self.create_publisher(Twist, 'cmd_vel', 10)
+        self.heartbeat_pub = self.create_publisher(UInt32, 'collision_monitor/heartbeat', 10)
+        self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
         # Actively hold the robot stopped while an e-stop is latched.
         self.create_timer(0.05, self.on_brake_timer)
+        self.create_timer(1.0, self.publish_diagnostics)
         self.get_logger().info('collision monitor ready')
 
     @property
     def estop(self):
-        return (self.track_critical or self.field_blocked or self.tracks_stale
-                or self.imu_stale)
+        return bool(self.track_critical or self.field_blocked or self.stale_inputs
+                    or self.lidar_failed)
+
+    def input_age(self, name):
+        last = self.inputs[name]['last']
+        if last is None:
+            return math.inf
+        return (self.get_clock().now() - last).nanoseconds * 1e-9
+
+    def _received(self, name):
+        self.inputs[name]['last'] = self.get_clock().now()
 
     @property
-    def tracks_stale(self):
-        if self.last_tracks is None:
-            return True
-        age = (self.get_clock().now() - self.last_tracks).nanoseconds * 1e-9
-        return age > self.tracks_timeout
+    def stale_inputs(self):
+        return [n for n, i in self.inputs.items()
+                if i['used'] and self.input_age(n) > i['timeout']]
 
     @property
-    def imu_stale(self):
-        if not self.use_stability:
-            return False
-        if self.last_imu is None:
-            return True
-        return (self.get_clock().now() - self.last_imu).nanoseconds * 1e-9 > self.imu_timeout
+    def lidar_failed(self):
+        return self.lidar_level >= DiagnosticStatus.ERROR[0]
+
+    @property
+    def lidar_degraded(self):
+        return self.lidar_level == DiagnosticStatus.WARN[0]
+
+    def stop_reason(self):
+        if self.stale_inputs:
+            return 'no recent ' + ', '.join(self.stale_inputs)
+        if self.lidar_failed:
+            return 'LiDAR: ' + self.lidar_message
+        if self.track_critical:
+            return 'object in path'
+        if self.field_blocked:
+            return f'protective field, obstacle {self.field_distance:.2f} m ahead'
+        return ''
+
+    def on_diagnostics(self, msg):
+        for st in msg.status:
+            if st.name == LIDAR_HEALTH:
+                level = st.level[0] if isinstance(st.level, bytes) else int(st.level)
+                if level != self.lidar_level and level != DiagnosticStatus.OK[0]:
+                    self.get_logger().warn(f'LiDAR: {st.message}')
+                self.lidar_level, self.lidar_message = level, st.message
 
     def _on_set_parameters(self, params):
         for p in params:
@@ -203,6 +252,7 @@ class MonitorNode(Node):
             self.speed_accel = float(self.speed_rate.update([rate], dt)[0])
         self.last_odom = (stamp, msg.twist.twist.linear.x)
         self.forward_speed = msg.twist.twist.linear.x
+        self._received('odometry')
         if not self.use_odom:
             return
         p = msg.pose.pose
@@ -225,7 +275,7 @@ class MonitorNode(Node):
         w, a = msg.angular_velocity, msg.linear_acceleration
         self.stability.update_imu(R @ np.array([w.x, w.y, w.z]), R @ np.array([a.x, a.y, a.z]),
                                   dt, self.forward_speed, self.speed_accel)
-        self.last_imu = self.get_clock().now()
+        self._received('IMU')
 
     def _stability_limit(self, msg):
         """The command after the stability limit, and the scale that was applied."""
@@ -255,15 +305,25 @@ class MonitorNode(Node):
         out.angular.z = float(w_out)
         return out, k
 
+    def _degraded_limit(self, msg):
+        """Cap speed while part of the LiDAR view is blank, keeping the path curvature."""
+        if not self.lidar_degraded or abs(msg.linear.x) <= self.degraded_max_speed:
+            return msg
+        k = self.degraded_max_speed / abs(msg.linear.x)
+        out = Twist()
+        out.linear.x = msg.linear.x * k
+        out.angular.z = msg.angular.z * k
+        return out
+
     def on_cmd_in(self, msg):
         if not (self.estop and self.enable_estop):
             if self.use_stability:
                 msg, self.command_scale = self._stability_limit(msg)
                 self.last_cmd_time = self.get_clock().now()
-            self.cmd_pub.publish(msg)
+            self.cmd_pub.publish(self._degraded_limit(msg))
             return
         # A field stop still allows backing away; the field then checks behind.
-        if not (self.track_critical or self.tracks_stale or self.imu_stale) \
+        if not (self.track_critical or self.stale_inputs or self.lidar_failed) \
                 and msg.linear.x < 0.0:
             self.last_reverse = self.get_clock().now()
             self.cmd_pub.publish(msg)
@@ -271,6 +331,8 @@ class MonitorNode(Node):
             self.cmd_pub.publish(Twist())
 
     def on_brake_timer(self):
+        self.heartbeat = (self.heartbeat + 1) % 2 ** 32
+        self.heartbeat_pub.publish(UInt32(data=self.heartbeat))
         if not (self.estop and self.enable_estop):
             # Most drives hold the last command, so a ramp-down continues here when
             # commands stop arriving.
@@ -278,16 +340,48 @@ class MonitorNode(Node):
                     self.get_clock().now() - self.last_cmd_time).nanoseconds > 1e8:
                 msg, self.command_scale = self._stability_limit(self.last_cmd_msg)
                 self.last_cmd_time = self.get_clock().now()
-                self.cmd_pub.publish(msg)
+                self.cmd_pub.publish(self._degraded_limit(msg))
             return
-        if self.tracks_stale or self.imu_stale:
-            self.get_logger().warn(
-                'no recent {}, holding stop'.format('tracks' if self.tracks_stale else 'IMU data'),
-                throttle_duration_sec=2.0)
+        if self.stale_inputs or self.lidar_failed:
+            self.get_logger().warn(f'{self.stop_reason()}, holding stop',
+                                   throttle_duration_sec=2.0)
         elif self.last_reverse is not None and not self.track_critical:
             if (self.get_clock().now() - self.last_reverse).nanoseconds < 3e8:
                 return
         self.cmd_pub.publish(Twist())
+
+    def publish_diagnostics(self):
+        inputs = DiagnosticStatus(name='collision_monitor: inputs', hardware_id='monitor')
+        stale = self.stale_inputs
+        inputs.level = DiagnosticStatus.ERROR if stale else DiagnosticStatus.OK
+        inputs.message = 'stale: ' + ', '.join(stale) if stale else 'all inputs current'
+        for name, i in self.inputs.items():
+            if i['used']:
+                age = self.input_age(name)
+                inputs.values.append(KeyValue(
+                    key=f'{name} age (s)', value='never' if age == math.inf else f'{age:.2f}'))
+
+        gate = DiagnosticStatus(name='collision_monitor: gate', hardware_id='monitor')
+        reason = self.stop_reason()
+        limits = []
+        if self.lidar_degraded:
+            limits.append(f'LiDAR degraded, max {self.degraded_max_speed:.1f} m/s')
+        if self.use_stability and self.command_scale < 1.0:
+            limits.append(f'tip-over margin, commands x{self.command_scale:.2f}')
+        if not self.enable_estop:
+            gate.level, gate.message = DiagnosticStatus.WARN, 'stops disabled'
+        elif reason:
+            gate.level, gate.message = DiagnosticStatus.WARN, 'stopped: ' + reason
+        elif limits:
+            gate.level, gate.message = DiagnosticStatus.WARN, 'limited: ' + '; '.join(limits)
+        else:
+            gate.level, gate.message = DiagnosticStatus.OK, 'passing commands'
+        gate.values = [KeyValue(key='stop reason', value=reason or 'none'),
+                       KeyValue(key='LiDAR', value=self.lidar_message)]
+        arr = DiagnosticArray()
+        arr.header.stamp = self.get_clock().now().to_msg()
+        arr.status = [inputs, gate]
+        self.diag_pub.publish(arr)
 
     def on_stability_timer(self):
         st = self.stability
@@ -377,7 +471,7 @@ class MonitorNode(Node):
                 throttle_duration_sec=1.0)
 
     def on_tracks(self, msg):
-        self.last_tracks = self.get_clock().now()
+        self._received('tracks')
         if self.ego is None:
             return
         ex, ey, eyaw, evx, evy = self.ego

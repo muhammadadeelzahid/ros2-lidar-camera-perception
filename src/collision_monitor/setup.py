@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'monitor_node = collision_monitor.monitor_node:main',
+            'drive_watchdog = collision_monitor.drive_watchdog:main',
         ],
     },
 )
