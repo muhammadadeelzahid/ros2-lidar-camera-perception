@@ -2,7 +2,9 @@
 """3D object detection node.
 
 Runs the detector on each point cloud and publishes vision_msgs/Detection3DArray
-in the LiDAR frame.
+in the LiDAR frame. Also reports LiDAR health on /diagnostics: scan rate, number of
+returns and how much of the view they cover, so a blocked or dirty sensor shows up
+before it hides an object.
 """
 
 import math
@@ -18,6 +20,7 @@ from rclpy.node import Node
 
 from ament_index_python.packages import get_package_share_directory
 
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import PointCloud2
 from lidar_object_detection.cloud import cloud_to_xyz
@@ -28,7 +31,10 @@ from vision_msgs.msg import (
     ObjectHypothesisWithPose,
 )
 
+from lidar_object_detection.health import ERROR, scan_health
 from lidar_object_detection.model import DetectorModel
+
+HEALTH_NAME = 'lidar_detector: lidar'
 
 
 def yaw_to_quat(yaw):
@@ -59,8 +65,26 @@ class DetectorNode(Node):
         self.get_logger().info(f'detector ready (backend: {self.model.backend})')
         self.timings = []  # seconds per scan, reported every 100 scans
 
+        self.health_cfg = {
+            'sectors': self.declare_parameter('health_sectors', 36).value,
+            'min_sector_points': self.declare_parameter('health_min_sector_points', 5).value,
+            'min_points': self.declare_parameter('health_min_points', 200).value,
+            'warn_coverage': self.declare_parameter('health_warn_coverage', 0.9).value,
+            'error_coverage': self.declare_parameter('health_error_coverage', 0.5).value,
+        }
+        self.health = None          # (level, points, coverage, blank ranges)
+        self.scan_times = []        # wall time of recent scans, for the rate
+        self.reported_level = None
+        self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        self.create_timer(1.0, self.publish_health)
+
     def on_cloud(self, msg):
         pts = cloud_to_xyz(msg)
+        now = time.monotonic()
+        self.scan_times = [t for t in self.scan_times if now - t < 2.0] + [now]
+        self.health = scan_health(pts, **self.health_cfg)
+        if self.health[0] != self.reported_level:
+            self.publish_health()
         if pts.shape[0] == 0:
             return
         cloud = np.hstack([pts, np.zeros((pts.shape[0], 1), dtype=np.float32)])
@@ -103,6 +127,34 @@ class DetectorNode(Node):
             out.detections.append(det)
         if rclpy.ok():
             self.pub.publish(out)
+
+
+    def publish_health(self):
+        now = time.monotonic()
+        self.scan_times = [t for t in self.scan_times if now - t < 2.0]
+        rate = len(self.scan_times) / 2.0
+        st = DiagnosticStatus(name=HEALTH_NAME, hardware_id=self.frame or 'lidar')
+        if self.health is None or not self.scan_times:
+            level = ERROR
+            st.message = 'no scans'
+        else:
+            level, n, coverage, blank = self.health
+            st.message = ('too few returns' if n < self.health_cfg['min_points'] else
+                          ('ok', 'part of the view blank', 'view mostly blank')[level])
+            st.values = [
+                KeyValue(key='points', value=str(n)),
+                KeyValue(key='coverage', value=f'{coverage:.2f}'),
+                KeyValue(key='blank sectors (deg)',
+                         value=', '.join(f'{a:.0f}-{b:.0f}' for a, b in blank) or 'none'),
+            ]
+        st.level = bytes([level])
+        st.values += [KeyValue(key='scan rate (Hz)', value=f'{rate:.1f}'),
+                      KeyValue(key='backend', value=self.model.backend)]
+        self.reported_level = level
+        arr = DiagnosticArray()
+        arr.header.stamp = self.get_clock().now().to_msg()
+        arr.status = [st]
+        self.diag_pub.publish(arr)
 
 
 def main(argv=None):
