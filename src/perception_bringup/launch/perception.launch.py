@@ -43,6 +43,13 @@ def generate_launch_description():
                     ('/imu', LaunchConfiguration('imu_topic')),
                     ('/points', LaunchConfiguration('points_topic'))])
 
+    # Drives to waypoints through the monitor; idle (and silent) until it gets a goal.
+    follower = Node(
+        package='waypoint_navigation', executable='follower_node',
+        name='waypoint_follower', output='screen', parameters=common,
+        remappings=[('/odom', LaunchConfiguration('odom_topic'))],
+        condition=IfCondition(LaunchConfiguration('use_navigation')))
+
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument(
@@ -64,10 +71,13 @@ def generate_launch_description():
                               description='tip-over monitoring; the robot will not move '
                                           'without IMU data while this is true'),
         DeclareLaunchArgument('imu_topic', default_value='/imu'),
+        DeclareLaunchArgument('use_navigation', default_value='true',
+                              description='run the waypoint follower'),
         DeclareLaunchArgument('imu_calibration', default_value='',
                               description='YAML written by calibrate_imu'),
         detector,
         camera,
         tracker,
         monitor,
+        follower,
     ])

@@ -14,6 +14,7 @@
   <exec_depend>camera_detection</exec_depend>
   <exec_depend>fusion_tracking</exec_depend>
   <exec_depend>collision_monitor</exec_depend>
+  <exec_depend>waypoint_navigation</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>velodyne_driver</exec_depend>

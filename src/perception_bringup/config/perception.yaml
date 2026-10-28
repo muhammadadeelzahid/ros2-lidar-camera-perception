@@ -56,3 +56,13 @@
     field_min_z: 0.1             # m above the base frame; ignores the ground
     field_max_z: 2.0
     field_min_points: 3
+
+/waypoint_follower:
+  ros__parameters:
+    speed: 0.5                   # m/s when the goal does not set one
+    max_yaw_rate: 1.0            # rad/s
+    lookahead: 0.6               # m; longer is smoother, shorter cuts corners less
+    goal_tolerance: 0.15         # m
+    heading_tolerance_deg: 1.0
+    decel: 0.5                   # m/s^2 used to slow down before the last waypoint
+    blocked_timeout: 60.0        # s without progress before the goal is aborted
