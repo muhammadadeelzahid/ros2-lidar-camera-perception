@@ -4,6 +4,9 @@
 Consumes 3D LiDAR detections and 2D camera detections, confirms each LiDAR detection's
 class by projecting it into the image, transforms detections into a stable tracking
 frame, runs the multi-object tracker, and publishes tracked objects and RViz markers.
+
+Camera detections older than camera_max_age are not used. Without the camera the
+tracker carries on with LiDAR classes alone and says so on /diagnostics.
 """
 
 import numpy as np
@@ -13,6 +16,7 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.time import Time
 
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from sensor_msgs.msg import CameraInfo
 from vision_msgs.msg import Detection2DArray, Detection3DArray
 from visualization_msgs.msg import Marker, MarkerArray
@@ -42,6 +46,7 @@ class TrackerNode(Node):
         gate = self.declare_parameter('gate_distance', 2.0).value
         max_age = self.declare_parameter('max_age', 1.0).value
         min_hits = self.declare_parameter('min_hits', 3).value
+        self.camera_max_age = self.declare_parameter('camera_max_age', 0.3).value
 
         self.tracker = MultiObjectTracker(
             gate_distance=gate, max_age=max_age, min_hits=min_hits)
@@ -49,6 +54,9 @@ class TrackerNode(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         self.cam_dets = []      # (cls, score, cx, cy, w, h)
+        self.cam_time = None    # when the last camera detections arrived
+        self.camera_ok = None
+        self.track_count = 0
         self.K = None
         self.last_stamp = None
 
@@ -63,6 +71,8 @@ class TrackerNode(Node):
             TrackedObjectArray, '/tracks', 10)
         self.marker_pub = self.create_publisher(
             MarkerArray, '/tracks/markers', 10)
+        self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        self.create_timer(1.0, self.publish_diagnostics)
         self.get_logger().info('fusion + tracking ready')
 
     def on_caminfo(self, msg):
@@ -82,6 +92,22 @@ class TrackerNode(Node):
             dets.append((cls, score, b.center.position.x, b.center.position.y,
                          b.size_x, b.size_y))
         self.cam_dets = dets
+        self.cam_time = self.get_clock().now()
+
+    def camera_age(self):
+        if self.cam_time is None:
+            return float('inf')
+        return (self.get_clock().now() - self.cam_time).nanoseconds * 1e-9
+
+    def _check_camera(self):
+        ok = self.camera_age() <= self.camera_max_age
+        if ok != self.camera_ok:
+            if ok:
+                self.get_logger().info('camera detections arriving; fusing camera and LiDAR')
+            elif self.camera_ok is not None:
+                self.get_logger().warn('no recent camera detections; LiDAR only')
+            self.camera_ok = ok
+        return ok
 
     def _lookup(self, target, source, stamp):
         try:
@@ -106,6 +132,7 @@ class TrackerNode(Node):
             return
         t_track, q_track = tfx.transform_from_msg(to_track)
 
+        use_camera = self._check_camera()
         detections = []
         for d in msg.detections:
             if not d.results:
@@ -118,7 +145,7 @@ class TrackerNode(Node):
                 (c.orientation.x, c.orientation.y, c.orientation.z, c.orientation.w))
 
             # Camera-LiDAR fusion: confirm class by projecting into the image.
-            if to_cam is not None and self.K is not None and self.cam_dets:
+            if use_camera and to_cam is not None and self.K is not None and self.cam_dets:
                 t_cam, q_cam = tfx.transform_from_msg(to_cam)
                 p_cam = tfx.transform_point(t_cam, q_cam, p_src)
                 cls, score = confirm_class(
@@ -132,8 +159,26 @@ class TrackerNode(Node):
         self.tracker.step(detections, dt)
         self.publish(msg.header.stamp)
 
+    def publish_diagnostics(self):
+        ok = self._check_camera()
+        age = self.camera_age()
+        st = DiagnosticStatus(name='fusion_tracker: camera', hardware_id='camera')
+        st.level = DiagnosticStatus.OK if ok else DiagnosticStatus.WARN
+        st.message = 'fusing camera and LiDAR' if ok else 'no recent camera detections, LiDAR only'
+        st.values = [
+            KeyValue(key='camera detection age (s)',
+                     value=f'{age:.2f}' if age != float('inf') else 'never'),
+            KeyValue(key='camera intrinsics', value='yes' if self.K is not None else 'no'),
+            KeyValue(key='confirmed tracks', value=str(self.track_count)),
+        ]
+        arr = DiagnosticArray()
+        arr.header.stamp = self.get_clock().now().to_msg()
+        arr.status = [st]
+        self.diag_pub.publish(arr)
+
     def publish(self, stamp):
         tracks = self.tracker.confirmed()
+        self.track_count = len(tracks)
         arr = TrackedObjectArray()
         arr.header.stamp = stamp
         arr.header.frame_id = self.tracking_frame
