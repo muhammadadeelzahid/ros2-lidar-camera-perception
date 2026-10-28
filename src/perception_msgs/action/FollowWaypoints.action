@@ -1,0 +1,16 @@
+# Drive through waypoints in order. Waypoints are in the odom frame, or with relative
+# set, x forward and y left of the robot's pose when the goal starts.
+geometry_msgs/Point[] waypoints
+bool relative
+float32 speed              # m/s, 0 for the follower's default
+float32 final_heading      # rad, NaN to keep the heading of the last segment;
+                           # relative to the start heading when relative is set
+---
+bool success
+string message
+float32 distance_travelled # m
+---
+uint32 waypoint            # index of the waypoint being driven to
+float32 distance_remaining # m along the remaining path
+string state               # driving, turning or waiting
+string reason              # why the robot is waiting, as reported by the collision monitor
