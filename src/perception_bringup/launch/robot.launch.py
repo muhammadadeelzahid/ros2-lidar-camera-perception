@@ -50,6 +50,9 @@ def launch_setup(context, *args, **kwargs):
         static_tf(cam_cfg['frame'], 'camera_optical_frame', [0.0, 0.0, 0.0],
                   [-math.pi / 2, 0.0, -math.pi / 2]),
     ]
+    imu_cfg = sensors.get('imu')
+    if imu_cfg and arg('use_imu') == 'true':
+        nodes.append(static_tf(base, imu_cfg['frame'], imu_cfg['xyz'], imu_cfg['rpy']))
 
     lidar = arg('lidar')
     points_topic = arg('points_topic')
