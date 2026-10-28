@@ -5,7 +5,9 @@ towards the gravity direction to remove drift. While the vehicle accelerates the
 accelerometer no longer points along gravity. Acceleration known from odometry
 (change of speed, and speed times yaw rate in a turn) is subtracted first; what is
 left is caught only partly by reducing the accelerometer's weight in proportion to
-how far the measured magnitude is from g.
+how far the measured magnitude is from g. If the estimate is far from the
+accelerometer while the vehicle is close to static, for example after it was knocked
+over, the filter starts again from the accelerometer.
 """
 
 import math
@@ -39,12 +41,13 @@ def rp_matrix(roll, pitch):
 
 class ComplementaryFilter:
 
-    def __init__(self, time_constant=1.0, accel_gate=2.0):
+    def __init__(self, time_constant=1.0, accel_gate=2.0, reset_angle=0.5):
         # time_constant (s): below it the gyro is trusted, above it the accelerometer.
         # accel_gate (m/s^2): deviation of |f| from g at which the accelerometer
         # is ignored completely.
         self.tau = time_constant
         self.gate = accel_gate
+        self.reset_angle = reset_angle  # rad
         self.roll = None
         self.pitch = None
 
@@ -60,9 +63,13 @@ class ComplementaryFilter:
         roll = self.roll + droll * dt
         pitch = self.pitch + dpitch * dt
         weight = max(0.0, 1.0 - abs(np.linalg.norm(accel) - GRAVITY) / self.gate)
+        static = weight > 0.9 and np.linalg.norm(gyro) < 0.5
+        if static and max(abs(_wrap(acc_roll - roll)), abs(acc_pitch - pitch)) > self.reset_angle:
+            self.roll, self.pitch = acc_roll, acc_pitch
+            return self.roll, self.pitch
         k = dt / (self.tau + dt) * weight
-        self.roll = roll + k * _wrap(acc_roll - roll)
-        self.pitch = pitch + k * (acc_pitch - pitch)
+        self.roll = _wrap(roll + k * _wrap(acc_roll - roll))
+        self.pitch = float(np.clip(pitch + k * (acc_pitch - pitch), -math.pi / 2, math.pi / 2))
         return self.roll, self.pitch
 
 

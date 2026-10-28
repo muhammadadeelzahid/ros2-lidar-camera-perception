@@ -86,3 +86,11 @@ def test_low_pass_settles():
     for _ in range(200):
         out = lp.update([1.0, 2.0, 3.0], 0.01)
     assert np.allclose(out, [1.0, 2.0, 3.0], atol=1e-3)
+
+
+def test_filter_recovers_after_being_knocked_over():
+    flt = ComplementaryFilter(time_constant=1.0)
+    flt.update((0.0, 0.0, 0.0), gravity_specific_force(0.0, 0.0), 0.01)
+    flt.roll, flt.pitch = math.pi, 1.2  # lost track while tumbling
+    roll, pitch = flt.update((0.0, 0.0, 0.0), gravity_specific_force(0.05, 0.0), 0.01)
+    assert abs(roll - 0.05) < 1e-6 and abs(pitch) < 1e-6
