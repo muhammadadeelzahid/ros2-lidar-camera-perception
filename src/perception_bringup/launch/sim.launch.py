@@ -51,6 +51,7 @@ def generate_launch_description():
             'yaw': LaunchConfiguration('yaw'),
             'payload_height': LaunchConfiguration('payload_height'),
             'payload_mass': LaunchConfiguration('payload_mass'),
+            'wheels': LaunchConfiguration('wheels'),
         }.items(),
     )
 
@@ -93,6 +94,8 @@ def generate_launch_description():
         DeclareLaunchArgument('payload_height', default_value='0.0',
                               description='height of an extra mass above the ground, 0 for none'),
         DeclareLaunchArgument('payload_mass', default_value='6.0'),
+        DeclareLaunchArgument('wheels', default_value='2',
+                              description='2: centre wheels and casters, 4: skid steer'),
         DeclareLaunchArgument(
             'imu_calibration',
             default_value=PathJoinSubstitution(

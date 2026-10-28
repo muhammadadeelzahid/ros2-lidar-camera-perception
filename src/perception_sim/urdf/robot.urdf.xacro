@@ -17,6 +17,12 @@
        payload_height is measured from the ground; 0 leaves the robot as it is. -->
   <xacro:arg name="payload_height" default="0.0"/>
   <xacro:arg name="payload_mass" default="6.0"/>
+  <!-- 2: drive wheels in the middle with casters front and rear (default).
+       4: four driven wheels in a rectangle, skid steer; a stance closer to a loader
+       or forklift, used for the tip-over tests on slopes. -->
+  <xacro:arg name="wheels" default="2"/>
+  <xacro:property name="wheels" value="$(arg wheels)"/>
+  <xacro:property name="wheel_base" value="0.28"/>
   <xacro:property name="payload_height" value="$(arg payload_height)"/>
   <xacro:property name="payload_mass" value="$(arg payload_mass)"/>
 
@@ -59,7 +65,7 @@
     <origin xyz="0 0 ${wheel_radius + base_height/2.0}" rpy="0 0 0"/>
   </joint>
 
-  <xacro:macro name="wheel" params="prefix y_reflect">
+  <xacro:macro name="wheel" params="prefix y_reflect x:=0.0">
     <link name="${prefix}_wheel">
       <visual>
         <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
@@ -75,13 +81,21 @@
     <joint name="${prefix}_wheel_joint" type="continuous">
       <parent link="base_link"/>
       <child link="${prefix}_wheel"/>
-      <origin xyz="0 ${y_reflect * wheel_separation/2.0} ${-base_height/2.0}" rpy="0 0 0"/>
+      <origin xyz="${x} ${y_reflect * wheel_separation/2.0} ${-base_height/2.0}" rpy="0 0 0"/>
       <axis xyz="0 1 0"/>
     </joint>
   </xacro:macro>
 
-  <xacro:wheel prefix="left" y_reflect="1"/>
-  <xacro:wheel prefix="right" y_reflect="-1"/>
+  <xacro:if value="${wheels == 2}">
+    <xacro:wheel prefix="left" y_reflect="1"/>
+    <xacro:wheel prefix="right" y_reflect="-1"/>
+  </xacro:if>
+  <xacro:if value="${wheels == 4}">
+    <xacro:wheel prefix="front_left" y_reflect="1" x="${wheel_base/2.0}"/>
+    <xacro:wheel prefix="front_right" y_reflect="-1" x="${wheel_base/2.0}"/>
+    <xacro:wheel prefix="rear_left" y_reflect="1" x="${-wheel_base/2.0}"/>
+    <xacro:wheel prefix="rear_right" y_reflect="-1" x="${-wheel_base/2.0}"/>
+  </xacro:if>
 
   <!-- Casters front and rear so the body cannot pitch when accelerating or braking. -->
   <xacro:macro name="caster" params="name x_reflect">
@@ -106,8 +120,10 @@
     </joint>
   </xacro:macro>
 
-  <xacro:caster name="caster" x_reflect="1"/>
-  <xacro:caster name="rear_caster" x_reflect="-1"/>
+  <xacro:if value="${wheels == 2}">
+    <xacro:caster name="caster" x_reflect="1"/>
+    <xacro:caster name="rear_caster" x_reflect="-1"/>
+  </xacro:if>
 
   <!-- Camera at the front of the chassis, looking forward. -->
   <link name="camera_link">

@@ -2,8 +2,29 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <gazebo reference="base_link"><material>Gazebo/Blue</material></gazebo>
-  <gazebo reference="left_wheel"><material>Gazebo/Black</material></gazebo>
-  <gazebo reference="right_wheel"><material>Gazebo/Black</material></gazebo>
+  <xacro:if value="${wheels == 2}">
+    <gazebo reference="left_wheel"><material>Gazebo/Black</material></gazebo>
+    <gazebo reference="right_wheel"><material>Gazebo/Black</material></gazebo>
+  </xacro:if>
+  <xacro:if value="${wheels == 4}">
+    <xacro:macro name="skid_wheel" params="prefix">
+      <!-- Lower sideways friction so the wheels can slide when turning in place, and
+           some contact compliance, like a tyre, to damp skid-steer chatter. -->
+      <gazebo reference="${prefix}_wheel">
+        <material>Gazebo/Black</material>
+        <mu1>1.0</mu1>
+        <mu2>0.6</mu2>
+        <fdir1>1 0 0</fdir1>
+        <kp>200000.0</kp>
+        <kd>2000.0</kd>
+        <minDepth>0.001</minDepth>
+      </gazebo>
+    </xacro:macro>
+    <xacro:skid_wheel prefix="front_left"/>
+    <xacro:skid_wheel prefix="front_right"/>
+    <xacro:skid_wheel prefix="rear_left"/>
+    <xacro:skid_wheel prefix="rear_right"/>
+  </xacro:if>
   <!-- Low but non-zero caster friction: with none at all the robot yaws freely
        and rolls off a side slope. -->
   <gazebo reference="caster">
@@ -69,10 +90,23 @@
       <ros>
         <namespace>/</namespace>
       </ros>
-      <left_joint>left_wheel_joint</left_joint>
-      <right_joint>right_wheel_joint</right_joint>
-      <wheel_separation>0.34</wheel_separation>
-      <wheel_diameter>0.12</wheel_diameter>
+      <xacro:if value="${wheels == 2}">
+        <left_joint>left_wheel_joint</left_joint>
+        <right_joint>right_wheel_joint</right_joint>
+        <wheel_separation>0.34</wheel_separation>
+        <wheel_diameter>0.12</wheel_diameter>
+      </xacro:if>
+      <xacro:if value="${wheels == 4}">
+        <num_wheel_pairs>2</num_wheel_pairs>
+        <left_joint>front_left_wheel_joint</left_joint>
+        <right_joint>front_right_wheel_joint</right_joint>
+        <left_joint>rear_left_wheel_joint</left_joint>
+        <right_joint>rear_right_wheel_joint</right_joint>
+        <wheel_separation>0.34</wheel_separation>
+        <wheel_separation>0.34</wheel_separation>
+        <wheel_diameter>0.12</wheel_diameter>
+        <wheel_diameter>0.12</wheel_diameter>
+      </xacro:if>
       <max_wheel_torque>20.0</max_wheel_torque>
       <max_wheel_acceleration>1.0</max_wheel_acceleration>
       <command_topic>cmd_vel</command_topic>
@@ -93,8 +127,16 @@
         <namespace>/</namespace>
       </ros>
       <update_rate>50.0</update_rate>
-      <joint_name>left_wheel_joint</joint_name>
-      <joint_name>right_wheel_joint</joint_name>
+      <xacro:if value="${wheels == 2}">
+        <joint_name>left_wheel_joint</joint_name>
+        <joint_name>right_wheel_joint</joint_name>
+      </xacro:if>
+      <xacro:if value="${wheels == 4}">
+        <joint_name>front_left_wheel_joint</joint_name>
+        <joint_name>front_right_wheel_joint</joint_name>
+        <joint_name>rear_left_wheel_joint</joint_name>
+        <joint_name>rear_right_wheel_joint</joint_name>
+      </xacro:if>
     </plugin>
   </gazebo>
 

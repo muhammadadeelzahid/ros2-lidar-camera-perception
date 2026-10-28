@@ -30,7 +30,8 @@ def generate_launch_description():
     robot_description = ParameterValue(
         Command(['xacro ', xacro_file,
                  ' payload_height:=', LaunchConfiguration('payload_height'),
-                 ' payload_mass:=', LaunchConfiguration('payload_mass')]),
+                 ' payload_mass:=', LaunchConfiguration('payload_mass'),
+                 ' wheels:=', LaunchConfiguration('wheels')]),
         value_type=str)
 
     model_path = os.path.join(sim_share, 'models')
@@ -89,6 +90,8 @@ def generate_launch_description():
         DeclareLaunchArgument('payload_height', default_value='0.0',
                               description='height of an extra mass above the ground, 0 for none'),
         DeclareLaunchArgument('payload_mass', default_value='6.0'),
+        DeclareLaunchArgument('wheels', default_value='2',
+                              description='2: centre wheels and casters, 4: skid steer'),
         set_model_path,
         gazebo,
         robot_state_publisher,
