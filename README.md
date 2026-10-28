@@ -21,6 +21,7 @@ frames automatically for training and evaluating the detector.
 | `perception_bringup` | Launch files and configuration for robot and simulation |
 | `perception_sim` | Gazebo warehouse and robot model |
 | `perception_tools` | Auto-labeling, dataset export, training, calibration, evaluation |
+| `waypoint_navigation` | Waypoint following with pure pursuit on odometry |
 
 ## Pipeline
 
@@ -30,6 +31,7 @@ frames automatically for training and evaluating the detector.
 /detections/*       -> fusion_tracker     -> /tracks
 /tracks, /odom      -> collision_monitor  -> /collision_warnings
 /imu, /odom         -> collision_monitor  -> /stability
+waypoint goal       -> waypoint_follower  -> cmd_vel_in
 cmd_vel_in          -> collision_monitor  -> cmd_vel
 ```
 
@@ -49,7 +51,47 @@ centre of gravity to that edge. Before a command is passed on, the monitor predi
 the margin it would produce, adding the turn's lateral acceleration v * w to gravity
 at the current slope, and scales speed and turn rate down until the margin stays
 above `stability_min_margin_deg`. Slowing is rate limited so the stop itself does
-not tip the vehicle. If `/tracks` or `/imu` stop arriving, the robot is held stopped.
+not tip the vehicle.
+
+## Failsafes
+
+| Failure | Response |
+|---|---|
+| LiDAR stops, or the detector crashes or is still loading | `/tracks` stops; robot held stopped after `tracks_timeout` (0.5 s) |
+| Part of the LiDAR view blank, e.g. dirt or a blocked sensor | speed capped at `degraded_max_speed` (0.3 m/s) |
+| Most of the LiDAR view blank | robot held stopped |
+| Camera stops | carries on with LiDAR classes; camera detections older than 0.3 s are not used |
+| Odometry stops | robot held stopped after `odom_timeout` (0.5 s) |
+| IMU stops | robot held stopped after `imu_timeout` (0.2 s) |
+| Collision monitor stops | drive stops when the heartbeat or commands go quiet |
+
+The detector judges LiDAR health from the number of returns and how much of the
+view they cover: on level ground the floor returns points in every direction, so an
+empty sector means something is in the way of the sensor. Each node reports its
+state on `/diagnostics`; the monitor's `gate` entry says whether it is passing,
+limiting or stopping commands and why. View it with `rqt_robot_monitor`.
+
+The monitor publishes a heartbeat on `collision_monitor/heartbeat`. In simulation
+`drive_watchdog` stands between the monitor and the wheels and stops them if the
+heartbeat or the commands go quiet. On a real vehicle the drive controller should do
+the same, since many drives keep executing the last command they received.
+
+The fault test drives the robot in simulation and switches each failure on in turn,
+feeding the perception nodes through relays it can stop or degrade:
+
+```bash
+./scripts/fault_test.sh
+```
+
+| Fault | Robot | Time to stop |
+|---|---|---|
+| LiDAR stops | stopped | 1.1 s |
+| 135 degrees of LiDAR view blank | slowed from 0.5 to 0.3 m/s | |
+| 250 degrees of LiDAR view blank | stopped | 0.6 s |
+| Camera stops | kept driving, LiDAR only | |
+| Odometry stops | stopped | 1.2 s |
+| IMU stops | stopped | 0.7 s |
+| Collision monitor killed | stopped by the drive watchdog | 0.6 s |
 
 ## Build
 
@@ -86,6 +128,28 @@ comes with a matching `.agents.yaml`.
 ./scripts/generate_scenarios.sh 20
 ros2 launch perception_bringup sim.launch.py world:=$PWD/worlds/scene_004.world
 ```
+
+## Navigation
+
+`waypoint_follower` drives to waypoints with pure pursuit on odometry, through the
+collision monitor like any other command source. It does not plan around obstacles:
+when the monitor stops the robot it waits, reports why, and gives up after
+`blocked_timeout` without progress. Goals use the `FollowWaypoints` action; `nav_goal`
+sends one from the command line and prints progress. Ctrl-C cancels.
+
+```bash
+ros2 run waypoint_navigation nav_goal forward 5
+ros2 run waypoint_navigation nav_goal turn 90
+ros2 run waypoint_navigation nav_goal waypoints 3,0 3,3 0,3 0,0 --relative --heading 0
+ros2 run waypoint_navigation nav_goal route src/perception_bringup/config/warehouse_route.yaml
+```
+
+Without `--relative`, waypoints are in the odom frame. In simulation the robot came
+back to within 1 cm after a 3 m square, finished 500 m straight at 1 m/s 2 cm from the
+goal, and drove the 48 m warehouse loop in 113 s with pedestrians and the forklift
+crossing it, held three times by the collision monitor. Simulated odometry is exact;
+on a vehicle, wheel odometry drifts with distance and long routes need a localization
+source such as LiDAR odometry or GNSS.
 
 ## Physical robot
 

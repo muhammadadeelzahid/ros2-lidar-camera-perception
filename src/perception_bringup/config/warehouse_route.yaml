@@ -1,8 +1,8 @@
-# Loop round the shelves of the default warehouse, in the odom frame. The robot starts
-# at world (-8, 0) facing +x, which is the odom origin. Pedestrians and the forklift
-# cross this loop, so expect the collision monitor to hold the robot now and then.
+# Loop round the shelves of the default warehouse, relative to the start pose: x
+# forward, y left of the robot, which starts at (-8, 0) facing +x. Pedestrians and the
+# forklift cross this loop, so expect the collision monitor to hold the robot now and then.
 #   ros2 run waypoint_navigation nav_goal route warehouse_route.yaml
-relative: false
+relative: true
 speed: 0.5
 waypoints:
   - [0.0, 4.2]
